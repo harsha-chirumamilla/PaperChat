@@ -1,0 +1,21 @@
+# Base
+celery
+redis
+requests
+numpy
+
+# ML & RAG
+torch
+transformers
+accelerate
+bitsandbytes
+langchain
+langchain-community
+langchain-chroma
+langchain-huggingface
+langchain-experimental
+chromadb
+arxiv
+pymupdf
+sentence-transformers
+rank_bm25

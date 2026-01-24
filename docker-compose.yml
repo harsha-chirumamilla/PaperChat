@@ -1,0 +1,43 @@
+services:
+  api:
+    build:
+      context: .
+      target: api
+    image: paperchat-api:latest
+    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./src:/app/src
+      - ./data:/app/data
+    env_file:
+      - .env
+    depends_on:
+      - redis
+      - worker
+
+  worker:
+    build:
+      context: .
+      target: worker
+    image: paperchat-worker:latest
+    command: celery -A src.worker.celery_app worker --loglevel=info
+    volumes:
+      - ./src:/app/src
+      - ./data:/app/data
+    env_file:
+      - .env
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"

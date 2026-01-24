@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+.env
+
+# Data directories (large files)
+data/papers/*.pdf
+data/db/
+data/huggingface/
+
+# Keep directory structure
+!data/papers/.gitkeep
+!data/db/.gitkeep
+!data/huggingface/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+docs/
+data/*
+tests_imports.py
