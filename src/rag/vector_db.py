@@ -3,13 +3,15 @@ from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.documents import Document as LangChainDocument
 from src.common.config import Config
+from src.rag.embeddings import get_device
 
 
 class VectorDatabase:
     def __init__(self, persistence_directory: str = Config.DB_DIR):
+        device = get_device()
         self.embedding_fn = HuggingFaceEmbeddings(
             model_name=Config.EMBEDDING_MODEL_ID,
-            model_kwargs={'device': 'cuda'}, 
+            model_kwargs={'device': device}, 
             encode_kwargs={'normalize_embeddings': True}
         )
         self.persist_dir = persistence_directory

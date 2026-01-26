@@ -9,6 +9,10 @@ from src.rag.query.retriever import HybridRetriever
 from src.rag.query.reranker import DocumentReranker
 from src.rag.query.prompter import PromptFormatter
 from src.rag.query.rag_pipeline import RAGSystem
+from src.rag.query.query_expander import QueryExpander
+from src.rag.query.context_compressor import ContextCompressor
+from src.rag.query.prompt_cache_manager import PromptCacheManager
+from src.rag.query.answer_validator import AnswerValidator
 
 __all__ = [
     "LLMClient",
@@ -16,5 +20,9 @@ __all__ = [
     "DocumentReranker",
     "PromptFormatter",
     "RAGSystem",
+    "QueryExpander",
+    "ContextCompressor",
+    "PromptCacheManager",
+    "AnswerValidator",
 ]
 

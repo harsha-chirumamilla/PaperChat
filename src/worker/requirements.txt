@@ -1,21 +1,30 @@
 # Base
-celery
-redis
-requests
-numpy
+celery~=5.6.2
+redis~=7.1.0
+requests~=2.32.5
+numpy~=1.26.4
 
 # ML & RAG
-torch
-transformers
-accelerate
-bitsandbytes
-langchain
-langchain-community
-langchain-chroma
-langchain-huggingface
-langchain-experimental
-chromadb
-arxiv
-pymupdf
-sentence-transformers
-rank_bm25
+torch~=2.8.0
+transformers~=4.57.1
+accelerate~=1.2.1
+bitsandbytes~=0.45.0
+langchain~=1.2.7
+langchain-community~=0.4.1
+langchain-chroma~=1.1.0
+langchain-huggingface~=1.2.0
+langchain-experimental~=0.4.1
+chromadb~=1.4.0
+arxiv~=2.3.1
+pymupdf~=1.25.2
+sentence-transformers~=5.2.0
+rank_bm25~=0.2.2
+
+# Additional dependencies
+langchain-core~=1.2.7
+langchain-text-splitters~=1.1.0
+python-dotenv~=1.0.1
+pydantic~=2.12.2
+pydantic-settings~=2.12.0
+pyyaml~=6.0.2
+nltk~=3.9.2

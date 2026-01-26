@@ -4,6 +4,7 @@ from langchain_experimental.text_splitter import SemanticChunker
 from langchain_core.documents import Document as LangChainDocument
 from src.common.config import Config
 from src.rag.embeddings import get_embedding_function
+from src.rag.ingestion.hierarchical_chunker import HierarchicalChunker
 
 
 class PDFProcessor:
@@ -21,11 +22,38 @@ class PDFProcessor:
         return text
 
     @staticmethod
-    def create_chunks(text: str, metadata: Dict) -> List[LangChainDocument]:
+    def create_chunks(
+        text: str,
+        metadata: Dict,
+        use_hierarchical: bool = None
+    ) -> List[LangChainDocument]:
         """
-        Splits text into chunks using SemanticChunker with cached embeddings.
+        Splits text into chunks using hierarchical or semantic chunking.
+        
+        Args:
+            text: Text to chunk
+            metadata: Document metadata
+            use_hierarchical: If True, use hierarchical chunker. If None, use config value
         """
-        # Reuse cached embedding function (loaded only once)
+        # Check config if not explicitly specified
+        if use_hierarchical is None:
+            use_hierarchical = Config.USE_HIERARCHICAL_CHUNKING
+        
+        # Use hierarchical chunking for structured documents
+        if use_hierarchical:
+            chunker = HierarchicalChunker()
+            base_meta = {
+                "source": metadata["id"],
+                "title": metadata["title"],
+                "url": metadata["url"]
+            }
+            return chunker.create_hierarchical_chunks(
+                text,
+                base_meta,
+                base_chunk_size=Config.CHUNK_SIZE
+            )
+        
+        # Standard semantic chunking
         embedding_function = get_embedding_function()
         
         splitter = SemanticChunker(

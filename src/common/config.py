@@ -38,6 +38,25 @@ class Config:
 
     # Ingestion
     MAX_PAPERS_PER_BATCH = int(os.getenv("MAX_PAPERS_PER_BATCH", 5))
+    
+    # Query Expansion
+    ENABLE_QUERY_EXPANSION = os.getenv("ENABLE_QUERY_EXPANSION", "true").lower() == "true"
+    QUERY_EXPANSION_VARIANTS = int(os.getenv("QUERY_EXPANSION_VARIANTS", 2))
+    
+    # Context Compression
+    MAX_CONTEXT_TOKENS = int(os.getenv("MAX_CONTEXT_TOKENS", 2500))
+    COMPRESSION_ENABLED = os.getenv("COMPRESSION_ENABLED", "true").lower() == "true"
+    
+    # Agentic Workflow
+    ENABLE_AGENT = os.getenv("ENABLE_AGENT", "false").lower() == "true"
+    AGENT_MAX_ITERATIONS = int(os.getenv("AGENT_MAX_ITERATIONS", 5))
+    
+    # Answer Validation
+    VALIDATE_ANSWERS = os.getenv("VALIDATE_ANSWERS", "true").lower() == "true"
+    VALIDATION_THRESHOLD = float(os.getenv("VALIDATION_THRESHOLD", 0.7))
+    
+    # Hierarchical Chunking
+    USE_HIERARCHICAL_CHUNKING = os.getenv("USE_HIERARCHICAL_CHUNKING", "false").lower() == "true"
 
 # Create directories if they don't exist
 os.makedirs(Config.PAPERS_DIR, exist_ok=True)

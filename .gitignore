@@ -9,16 +9,19 @@ venv/
 ENV/
 .venv
 .env
+.env.*
+!.env.template
 
 # Data directories (large files)
 data/papers/*.pdf
 data/db/
 data/huggingface/
+src/data/papers/*.pdf
+src/data/db/
 
-# Keep directory structure
-!data/papers/.gitkeep
-!data/db/.gitkeep
-!data/huggingface/.gitkeep
+# Keep empty directories
+!src/data/papers/.gitkeep
+!src/data/db/.gitkeep
 
 # IDE
 .vscode/
@@ -32,6 +35,13 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Build directories
+build/
 docs/
 data/*
+
+# Other files
 tests_imports.py
+DEPLOYMENT.md
+instructions

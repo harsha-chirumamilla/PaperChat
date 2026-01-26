@@ -7,6 +7,7 @@ from src.common.config import Config
 class ArxivLoader:
     def __init__(self, download_dir: str = Config.PAPERS_DIR):
         self.download_dir = download_dir
+        os.makedirs(self.download_dir, exist_ok=True)
         self.client = arxiv.Client()
 
     def fetch_papers(self, query: str = "cat:cs.AI", max_results: int = 5) -> List[Dict]:

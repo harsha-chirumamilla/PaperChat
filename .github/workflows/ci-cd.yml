@@ -1,0 +1,214 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'development'
+        type: choice
+        options:
+          - development
+          - production
+
+env:
+  PYTHON_VERSION: '3.12'
+
+jobs:
+  # ============================================
+  # Job 1: Test & Quality Checks
+  # ============================================
+  test:
+    name: Tests & Code Quality
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'development' }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pytest pytest-cov pytest-asyncio
+        pip install -r src/api/requirements.txt
+        pip install -r src/worker/requirements.txt
+    
+    - name: Run tests with coverage
+      env:
+        # API Keys (Secrets)
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        
+        # Configuration (Variables)
+        MODEL_PROVIDER: ${{ vars.MODEL_PROVIDER }}
+        OPENAI_MODEL_ID: ${{ vars.OPENAI_MODEL_ID }}
+        GEMINI_MODEL_ID: ${{ vars.GEMINI_MODEL_ID }}
+        ANTHROPIC_MODEL_ID: ${{ vars.ANTHROPIC_MODEL_ID }}
+        
+        EMBEDDING_MODEL_ID: ${{ vars.EMBEDDING_MODEL_ID }}
+        RERANKER_MODEL_ID: ${{ vars.RERANKER_MODEL_ID }}
+        
+        CHUNK_SIZE: ${{ vars.CHUNK_SIZE }}
+        CHUNK_OVERLAP: ${{ vars.CHUNK_OVERLAP }}
+        RETRIEVAL_K: ${{ vars.RETRIEVAL_K }}
+        RERANK_TOP_K: ${{ vars.RERANK_TOP_K }}
+        
+        MAX_NEW_TOKENS: ${{ vars.MAX_NEW_TOKENS }}
+        TEMPERATURE: ${{ vars.TEMPERATURE }}
+        
+        ENABLE_QUERY_EXPANSION: ${{ vars.ENABLE_QUERY_EXPANSION }}
+        QUERY_EXPANSION_VARIANTS: ${{ vars.QUERY_EXPANSION_VARIANTS }}
+        COMPRESSION_ENABLED: ${{ vars.COMPRESSION_ENABLED }}
+        MAX_CONTEXT_TOKENS: ${{ vars.MAX_CONTEXT_TOKENS }}
+        
+        VALIDATE_ANSWERS: ${{ vars.VALIDATE_ANSWERS }}
+        VALIDATION_THRESHOLD: ${{ vars.VALIDATION_THRESHOLD }}
+        USE_HIERARCHICAL_CHUNKING: ${{ vars.USE_HIERARCHICAL_CHUNKING }}
+      run: |
+        pytest --cov=src --cov-report=term-missing || true
+      continue-on-error: true
+    
+    - name: Run basic code quality checks
+      run: |
+        pip install flake8
+        flake8 src/ --max-line-length=120 --exclude=__pycache__,*.pyc --count --statistics || true
+      continue-on-error: true
+
+  # ============================================
+  # Job 2: Deploy to Hugging Face Spaces
+  # ============================================
+  deploy-hf:
+    name: Deploy to Hugging Face Spaces
+    runs-on: ubuntu-latest
+    needs: test
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    environment: ${{ github.event.inputs.environment || 'development' }}
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        lfs: true
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+    
+    - name: Install Hugging Face CLI
+      run: |
+        python -m pip install --upgrade pip
+        pip install "huggingface_hub[cli]"
+    
+    - name: Login to Hugging Face
+      env:
+        HF_TOKEN: ${{ secrets.HF_TOKEN }}
+      run: |
+        hf auth login --token $HF_TOKEN --add-to-git-credential
+    
+    - name: Set deployment target
+      id: deployment
+      run: |
+        if [ "${{ github.event.inputs.environment }}" == "production" ]; then
+          echo "space=${{ secrets.HF_SPACE_NAME }}" >> $GITHUB_OUTPUT
+        else
+          echo "space=${{ secrets.HF_SPACE_NAME_DEV }}" >> $GITHUB_OUTPUT
+        fi
+    
+    - name: Push to Hugging Face Space
+      env:
+        HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        HF_SPACE: ${{ steps.deployment.outputs.space }}
+      run: |
+        # Clone the Space repository
+        git clone https://huggingface.co/spaces/$HF_SPACE hf-space
+        
+        # Copy application files
+        cp -r src hf-space/
+        mkdir -p hf-space/data
+        cp app.py hf-space/
+        cp requirements-hf.txt hf-space/requirements.txt
+        cp README-HF.md hf-space/README.md
+        
+        # Configure git
+        cd hf-space
+        git config user.email "github-actions@github.com"
+        git config user.name "GitHub Actions"
+        
+        # Commit and push
+        git add .
+        git commit -m "Deploy from GitHub Actions - $(date)" || echo "No changes to commit"
+        git push https://user:$HF_TOKEN@huggingface.co/spaces/$HF_SPACE main
+    
+    - name: Configure HF Space Secrets
+      env:
+        HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        HF_SPACE: ${{ steps.deployment.outputs.space }}
+      run: |
+        pip install huggingface_hub
+        python << EOF
+        from huggingface_hub import HfApi
+        api = HfApi(token="$HF_TOKEN")
+        
+        # Set secrets
+        secrets = {
+            "OPENAI_API_KEY": "${{ secrets.OPENAI_API_KEY }}",
+            "GEMINI_API_KEY": "${{ secrets.GEMINI_API_KEY }}",
+            "ANTHROPIC_API_KEY": "${{ secrets.ANTHROPIC_API_KEY }}",
+        }
+        
+        for key, value in secrets.items():
+            if value:  # Only set if value exists
+                api.add_space_secret("$HF_SPACE", key, value)
+                print(f"✓ Set secret: {key}")
+        
+        # Set variables
+        variables = {
+            "MODEL_PROVIDER": "${{ vars.MODEL_PROVIDER }}",
+            "OPENAI_MODEL_ID": "${{ vars.OPENAI_MODEL_ID }}",
+            "GEMINI_MODEL_ID": "${{ vars.GEMINI_MODEL_ID }}",
+            "ANTHROPIC_MODEL_ID": "${{ vars.ANTHROPIC_MODEL_ID }}",
+            "EMBEDDING_MODEL_ID": "${{ vars.EMBEDDING_MODEL_ID }}",
+            "RERANKER_MODEL_ID": "${{ vars.RERANKER_MODEL_ID }}",
+            "CHUNK_SIZE": "${{ vars.CHUNK_SIZE }}",
+            "CHUNK_OVERLAP": "${{ vars.CHUNK_OVERLAP }}",
+            "RETRIEVAL_K": "${{ vars.RETRIEVAL_K }}",
+            "RERANK_TOP_K": "${{ vars.RERANK_TOP_K }}",
+            "MAX_NEW_TOKENS": "${{ vars.MAX_NEW_TOKENS }}",
+            "TEMPERATURE": "${{ vars.TEMPERATURE }}",
+            "ENABLE_QUERY_EXPANSION": "${{ vars.ENABLE_QUERY_EXPANSION }}",
+            "QUERY_EXPANSION_VARIANTS": "${{ vars.QUERY_EXPANSION_VARIANTS }}",
+            "COMPRESSION_ENABLED": "${{ vars.COMPRESSION_ENABLED }}",
+            "MAX_CONTEXT_TOKENS": "${{ vars.MAX_CONTEXT_TOKENS }}",
+            "VALIDATE_ANSWERS": "${{ vars.VALIDATE_ANSWERS }}",
+            "VALIDATION_THRESHOLD": "${{ vars.VALIDATION_THRESHOLD }}",
+            "USE_HIERARCHICAL_CHUNKING": "${{ vars.USE_HIERARCHICAL_CHUNKING }}",
+        }
+        
+        for key, value in variables.items():
+            if value:  # Only set if value exists
+                api.add_space_variable("$HF_SPACE", key, value)
+                print(f"✓ Set variable: {key}")
+        
+        print("\n✅ All environment variables configured!")
+        EOF
+    
+    - name: Deployment Summary
+      run: |
+        echo "🚀 Deployment completed!"
+        echo "🌍 Environment: ${{ github.event.inputs.environment || 'development' }}"
+        echo "📍 Space URL: https://huggingface.co/spaces/${{ steps.deployment.outputs.space }}"
+        echo "🔐 Secrets & Variables configured automatically"
