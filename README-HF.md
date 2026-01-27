@@ -5,7 +5,6 @@ colorFrom: blue
 colorTo: purple
 sdk: docker
 app_port: 7860
-app_file: app.py
 pinned: true
 license: mit
 tags:
@@ -79,16 +78,18 @@ Final Answer
 
 ## 💡 API Usage
 
-This is a REST API service. Use the following endpoints:
+This is a REST API service deployed at: `https://harsha-13-paper-chat.hf.space`
+
+**Note**: Port 7860 is the FastAPI application port (Redis runs internally on 6379).
 
 ### Health Check
 ```bash
-curl https://paper-chat.hf.space/health
+curl https://harsha-13-paper-chat.hf.space/health
 ```
 
 ### Submit a Query
 ```bash
-curl -X POST https://paper-chat.hf.space/api/v1/query \
+curl -X POST https://harsha-13-paper-chat.hf.space/api/v1/query \
   -H "Content-Type: application/json" \
   -d '{"query": "What are transformers in machine learning?"}'
 ```
@@ -103,7 +104,7 @@ Response:
 
 ### Get Query Result
 ```bash
-curl https://paper-chat.hf.space/api/v1/query/abc123...
+curl https://harsha-13-paper-chat.hf.space/api/v1/query/abc123...
 ```
 
 Response:
@@ -117,13 +118,14 @@ Response:
 
 ### Ingest Papers
 ```bash
-curl -X POST https://paper-chat.hf.space/api/v1/ingest \
+curl -X POST https://harsha-13-paper-chat.hf.space/api/v1/ingest \
   -H "Content-Type: application/json" \
   -d '{"query": "attention is all you need", "max_results": 1}'
 ```
 
 ### Interactive API Documentation
-Visit `/docs` for interactive Swagger UI or `/redoc` for ReDoc documentation.
+- **Swagger UI**: https://harsha-13-paper-chat.hf.space/docs
+- **ReDoc**: https://harsha-13-paper-chat.hf.space/redoc
 
 ## 📚 Example Questions
 

@@ -7,8 +7,6 @@ numpy~=1.26.4
 # ML & RAG
 torch~=2.8.0
 transformers~=4.57.1
-accelerate~=1.2.1
-bitsandbytes~=0.45.0
 langchain~=1.2.7
 langchain-community~=0.4.1
 langchain-chroma~=1.1.0

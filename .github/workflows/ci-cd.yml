@@ -136,7 +136,6 @@ jobs:
         echo "Uploading files to $HF_SPACE..."
         
         # Upload individual files
-        hf upload $HF_SPACE app.py app.py --repo-type=space --commit-message="Deploy from GitHub Actions"
         hf upload $HF_SPACE requirements-hf.txt requirements.txt --repo-type=space --commit-message="Update requirements"
         hf upload $HF_SPACE README-HF.md README.md --repo-type=space --commit-message="Update README"
         
@@ -147,6 +146,10 @@ jobs:
         
         if [ -f "entrypoint.sh" ]; then
           hf upload $HF_SPACE entrypoint.sh entrypoint.sh --repo-type=space --commit-message="Update entrypoint"
+        fi
+        
+        if [ -f "supervisord.conf" ]; then
+          hf upload $HF_SPACE supervisord.conf supervisord.conf --repo-type=space --commit-message="Update supervisord config"
         fi
         
         # Upload src directory

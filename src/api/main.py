@@ -30,6 +30,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+async def root():
+    return {
+        "name": "PaperChat API",
+        "version": "2.0.0",
+        "description": "RAG system for querying research papers",
+        "endpoints": {
+            "docs": "/docs",
+            "health": "/health",
+            "query": "POST /api/v1/query",
+            "query_status": "GET /api/v1/query/{task_id}",
+            "ingest": "POST /api/v1/ingest",
+            "ingest_status": "GET /api/v1/ingest/{task_id}"
+        }
+    }
+
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
