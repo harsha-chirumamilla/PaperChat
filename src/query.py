@@ -6,7 +6,7 @@ Queries the RAG system with a user question.
 
 import argparse
 import sys
-from src.rag.query import RAGSystem
+from src.rag.query.rag_pipeline import RAGSystem
 
 def run_query(question: str):
     """

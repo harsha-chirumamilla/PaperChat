@@ -4,7 +4,7 @@ CLI entry point for the GPU-Accelerated RAG Pipeline ingestion.
 """
 
 import argparse
-from src.rag.ingestion import run_ingestion
+from src.rag.ingestion.ingestion_service import run_ingestion
 from src.common.config import Config
 
 def main():

@@ -1,7 +1,8 @@
-from worker.celery_app import celery_app
-from src.rag.query import RAGSystem
-from src.rag.ingestion import ArxivLoader, PDFProcessor
-from src.rag import VectorDatabase
+from src.worker.celery_app import celery_app
+from src.rag.query.rag_pipeline import RAGSystem
+from src.rag.ingestion.data_loaders import ArxivLoader
+from src.rag.ingestion.pdf_processor import PDFProcessor
+from src.rag.vector_db import VectorDatabase
 import os
 import threading
 
