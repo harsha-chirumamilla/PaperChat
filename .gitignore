@@ -45,3 +45,4 @@ data/*
 tests_imports.py
 DEPLOYMENT.md
 instructions
+*instructions*.md

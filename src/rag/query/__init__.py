@@ -13,6 +13,7 @@ from src.rag.query.query_expander import QueryExpander
 from src.rag.query.context_compressor import ContextCompressor
 from src.rag.query.prompt_cache_manager import PromptCacheManager
 from src.rag.query.answer_validator import AnswerValidator
+from src.rag.query.query_classifier import QueryComplexityClassifier
 
 __all__ = [
     "LLMClient",
@@ -24,5 +25,6 @@ __all__ = [
     "ContextCompressor",
     "PromptCacheManager",
     "AnswerValidator",
+    "QueryComplexityClassifier",
 ]
 

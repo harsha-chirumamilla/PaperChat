@@ -1,6 +1,9 @@
 import requests
 import json
+import logging
 from src.common.config import Config
+
+logger = logging.getLogger(__name__)
 
 
 class LLMClient:
@@ -22,19 +25,19 @@ class LLMClient:
             if not Config.OPENAI_API_KEY:
                 raise ValueError("OPENAI_API_KEY environment variable must be set.")
             self.model_name = Config.OPENAI_MODEL_ID
-            print(f"OpenAI configured with model: {self.model_name}")
+            logger.info("OpenAI configured with model: %s", self.model_name)
             
         elif self.provider == "anthropic":
             if not Config.ANTHROPIC_API_KEY:
                 raise ValueError("ANTHROPIC_API_KEY environment variable must be set.")
             self.model_name = Config.ANTHROPIC_MODEL_ID
-            print(f"Anthropic configured with model: {self.model_name}")
+            logger.info("Anthropic configured with model: %s", self.model_name)
             
         elif self.provider == "gemini":
             if not Config.GEMINI_API_KEY:
                 raise ValueError("GEMINI_API_KEY environment variable must be set.")
             self.model_name = Config.GEMINI_MODEL_ID
-            print(f"Gemini configured with model: {self.model_name}")
+            logger.info("Gemini configured with model: %s", self.model_name)
             
         else:
             raise ValueError(

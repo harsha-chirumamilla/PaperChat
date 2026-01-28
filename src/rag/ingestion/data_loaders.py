@@ -1,7 +1,10 @@
 import os
+import logging
 import arxiv
 from typing import List, Dict
 from src.common.config import Config
+
+logger = logging.getLogger(__name__)
 
 
 class ArxivLoader:
@@ -31,14 +34,14 @@ class ArxivLoader:
             
             # Download if not exists
             if not os.path.exists(filepath):
-                print(f"Downloading {result.title}...")
+                logger.info("Downloading %s", result.title)
                 try:
                     result.download_pdf(dirpath=self.download_dir, filename=filename)
                 except Exception as e:
-                    print(f"Failed to download {result.title}: {e}")
+                    logger.error("Failed to download %s: %s", result.title, e)
                     continue
             else:
-                print(f"File {filename} already exists. Skipping download.")
+                logger.info("File %s already exists. Skipping download", filename)
                 
             papers_metadata.append({
                 "title": result.title,

@@ -1,9 +1,12 @@
 from typing import List
+import logging
 from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.documents import Document as LangChainDocument
 from src.common.config import Config
 from src.rag.embeddings import get_device
+
+logger = logging.getLogger(__name__)
 
 
 class VectorDatabase:
@@ -25,12 +28,26 @@ class VectorDatabase:
         """Adds documents to the vector store."""
         if not documents:
             return
-        print(f"Adding {len(documents)} chunks to vector database...")
+        logger.info("Adding %d chunks to vector database", len(documents))
         self._db.add_documents(documents)
-        print("Done.")
+        logger.info("Successfully added documents to database")
         
     def as_retriever(self, k: int = Config.RETRIEVAL_K):
         return self._db.as_retriever(search_kwargs={"k": k})
+    
+    def similarity_search(self, query: str, k: int = Config.RETRIEVAL_K, filter: dict = None) -> List[LangChainDocument]:
+        """
+        Perform similarity search with optional metadata filtering.
+        
+        Args:
+            query: Search query
+            k: Number of documents to retrieve
+            filter: Optional metadata filter (e.g., {'section': 'methods'})
+            
+        Returns:
+            List of similar documents
+        """
+        return self._db.similarity_search(query, k=k, filter=filter)
     
     def get_all_documents(self) -> List[LangChainDocument]:
         """Retrieves all documents from the vector store (for BM25 init)."""

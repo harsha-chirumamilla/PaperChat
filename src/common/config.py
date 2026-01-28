@@ -47,12 +47,12 @@ class Config:
     MAX_CONTEXT_TOKENS = int(os.getenv("MAX_CONTEXT_TOKENS", 2500))
     COMPRESSION_ENABLED = os.getenv("COMPRESSION_ENABLED", "true").lower() == "true"
     
-    # Agentic Workflow
+    # Agentic Workflow (expensive - disabled by default)
     ENABLE_AGENT = os.getenv("ENABLE_AGENT", "false").lower() == "true"
     AGENT_MAX_ITERATIONS = int(os.getenv("AGENT_MAX_ITERATIONS", 5))
     
-    # Answer Validation
-    VALIDATE_ANSWERS = os.getenv("VALIDATE_ANSWERS", "true").lower() == "true"
+    # Answer Validation (expensive - disabled by default for cost efficiency)
+    VALIDATE_ANSWERS = os.getenv("VALIDATE_ANSWERS", "false").lower() == "true"
     VALIDATION_THRESHOLD = float(os.getenv("VALIDATION_THRESHOLD", 0.7))
     
     # Hierarchical Chunking

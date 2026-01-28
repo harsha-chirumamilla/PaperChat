@@ -1,10 +1,13 @@
 import fitz
+import logging
 from typing import List, Dict
 from langchain_experimental.text_splitter import SemanticChunker
 from langchain_core.documents import Document as LangChainDocument
 from src.common.config import Config
 from src.rag.embeddings import get_embedding_function
 from src.rag.ingestion.hierarchical_chunker import HierarchicalChunker
+
+logger = logging.getLogger(__name__)
 
 
 class PDFProcessor:
@@ -17,7 +20,7 @@ class PDFProcessor:
                 for page in doc:
                     text += page.get_text()
         except Exception as e:
-            print(f"Error reading {filepath}: {e}")
+            logger.error("Error reading %s: %s", filepath, e)
             return ""
         return text
 
@@ -64,7 +67,7 @@ class PDFProcessor:
         try:
             texts = splitter.split_text(text)
         except Exception as e:
-            print(f"Semantic chunking failed: {e}. Falling back to basic splitting.")
+            logger.warning("Semantic chunking failed: %s. Falling back to basic splitting", e)
             # Fallback (import here to avoid circular or overhead if rarely used)
             from langchain_text_splitters import RecursiveCharacterTextSplitter
             splitter = RecursiveCharacterTextSplitter(

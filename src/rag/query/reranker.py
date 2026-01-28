@@ -1,7 +1,10 @@
 from typing import List
+import logging
 from langchain_core.documents import Document
 from sentence_transformers import CrossEncoder
 from src.common.config import Config
+
+logger = logging.getLogger(__name__)
 from src.rag.embeddings import get_device
 
 
@@ -10,7 +13,7 @@ class DocumentReranker:
     
     def __init__(self):
         """Initialize reranker with CrossEncoder model."""
-        print(f"Loading Reranker: {Config.RERANKER_MODEL_ID}")
+        logger.info("Loading reranker: %s", Config.RERANKER_MODEL_ID)
         device = get_device()
         self.reranker = CrossEncoder(
             Config.RERANKER_MODEL_ID,
@@ -31,7 +34,7 @@ class DocumentReranker:
         if not documents:
             return []
 
-        print(f"Reranking {len(documents)} documents...")
+        logger.info("Reranking %d documents", len(documents))
         pairs = [[query, doc.page_content] for doc in documents]
         scores = self.reranker.predict(pairs)
 

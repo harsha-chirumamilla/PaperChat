@@ -5,10 +5,13 @@ from src.rag.ingestion.pdf_processor import PDFProcessor
 from src.rag.vector_db import VectorDatabase
 import os
 import threading
+import logging
 
 import redis
 import json
 import hashlib
+
+logger = logging.getLogger(__name__)
 
 # Connect to Redis (same as Celery broker)
 REDIS_URL = os.getenv("CELERY_BROKER_URL", "redis://localhost:6379/0")
@@ -26,11 +29,11 @@ def get_rag_system():
         with _rag_lock:
             # Double-check locking pattern
             if _rag_system is None:
-                print("Initializing RAG System in worker...")
+                logger.info("Initializing RAG System in worker")
                 try:
                     _rag_system = RAGSystem()
                 except Exception as e:
-                    print(f"Failed to initialize RAG System: {e}")
+                    logger.error("Failed to initialize RAG System: %s", e)
                     raise
     
     return _rag_system
@@ -43,10 +46,10 @@ def process_query(self, query: str):
     cache_key = f"query:{hashlib.md5(query.encode()).hexdigest()}"
     cached_result = redis_client.get(cache_key)
     if cached_result:
-        print(f"Cache hit for query: {query}")
+        logger.info("Cache hit for query: %s", query)
         return json.loads(cached_result)
 
-    print(f"Processing query: {query}")
+    logger.info("Processing query: %s", query)
     answer = rag_system.query(query)
     citations = rag_system.get_citations(query)
     
@@ -62,7 +65,7 @@ def process_query(self, query: str):
 
 @celery_app.task(bind=True)
 def ingest_documents(self, query: str = "cat:cs.AI", max_results: int = 5):
-    print(f"Ingesting documents for query: {query}")
+    logger.info("Ingesting documents for query: %s", query)
     try:
         loader = ArxivLoader()
         papers = loader.fetch_papers(query=query, max_results=max_results)
@@ -81,5 +84,5 @@ def ingest_documents(self, query: str = "cat:cs.AI", max_results: int = 5):
             return {"status": "no_content", "papers_ingested": len(papers), "chunks_added": 0}
             
     except Exception as e:
-        print(f"Ingestion failed: {e}")
+        logger.error("Ingestion failed: %s", e)
         raise e
