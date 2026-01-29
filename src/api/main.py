@@ -1,13 +1,14 @@
 from fastapi import FastAPI, HTTPException, Depends, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
+from fastapi.responses import StreamingResponse
 from celery.result import AsyncResult
 from src.worker.celery_app import celery_app
 from src.common.models import QueryRequest, QueryResponse, IngestRequest, IngestResponse, TaskStatusResponse
 import os
+import json
 
-app = FastAPI(title="PaperChat API", version="2.0.0")
-
+app = FastAPI(title="PaperChat API", version="2.0.0", docs_url='/')
 # Security
 API_KEY_NAME = "X-API-Key"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
@@ -29,22 +30,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.get("/")
-async def root():
-    return {
-        "name": "PaperChat API",
-        "version": "2.0.0",
-        "description": "RAG system for querying research papers",
-        "endpoints": {
-            "docs": "/docs",
-            "health": "/health",
-            "query": "POST /api/v1/query",
-            "query_status": "GET /api/v1/query/{task_id}",
-            "ingest": "POST /api/v1/ingest",
-            "ingest_status": "GET /api/v1/ingest/{task_id}"
-        }
-    }
 
 @app.get("/health")
 async def health_check():
@@ -92,3 +77,70 @@ async def get_ingest_result(task_id: str, api_key: str = Security(get_api_key)):
         return TaskStatusResponse(task_id=task_id, status="failed", error=str(task_result.result))
     else:
         return TaskStatusResponse(task_id=task_id, status=task_result.state)
+
+@app.post("/api/v1/query/stream")
+async def stream_query(request: QueryRequest, api_key: str = Security(get_api_key)):
+    """
+    Stream query response for progressive delivery.
+    
+    Tier 3 optimization: Reduces perceived latency by streaming
+    LLM output as it's generated.
+    """
+    try:
+        async def generate():
+            """Generate streaming response with SSE format."""
+            from src.worker.tasks import get_rag_system
+            
+            # Get RAG system instance
+            rag_system = get_rag_system()
+            
+            # Send initial metadata
+            yield f"data: {json.dumps({'type': 'start', 'query': request.query})}\n\n"
+            
+            # Perform retrieval and reranking
+            retrieved_docs = rag_system.retriever.retrieve(request.query)
+            
+            if not retrieved_docs:
+                yield f"data: {json.dumps({'type': 'error', 'message': 'No relevant documents found'})}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+            
+            reranked_docs = rag_system.reranker.rerank(request.query, retrieved_docs)
+            
+            # Send source documents metadata
+            sources = [
+                {
+                    "title": doc.metadata.get("title", "Unknown"),
+                    "arxiv_id": doc.metadata.get("source", "N/A"),
+                    "url": doc.metadata.get("url", "N/A")
+                }
+                for doc in reranked_docs
+            ]
+            yield f"data: {json.dumps({'type': 'sources', 'data': sources})}\n\n"
+            
+            # Format prompt
+            prompt = rag_system.prompter.format_rag_prompt(request.query, reranked_docs)
+            
+            # Stream LLM response
+            yield f"data: {json.dumps({'type': 'answer_start'})}\n\n"
+            
+            async for chunk in rag_system.llm_client.stream_async(prompt):
+                # Send each chunk as SSE event
+                yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
+            
+            # Send completion signal
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            yield "data: [DONE]\n\n"
+        
+        return StreamingResponse(
+            generate(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no"  # Disable nginx buffering
+            }
+        )
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
