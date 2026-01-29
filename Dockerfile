@@ -21,10 +21,7 @@ COPY src/worker/requirements.txt worker-requirements.txt
 RUN python3 -m venv /opt/venv && \
     /opt/venv/bin/pip install --no-cache-dir --upgrade pip wheel setuptools && \
     /opt/venv/bin/pip install --no-cache-dir -r api-requirements.txt && \
-    /opt/venv/bin/pip install --no-cache-dir -r worker-requirements.txt && \
-    find /opt/venv -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true && \
-    find /opt/venv -type f -name "*.pyc" -delete && \
-    find /opt/venv -type f -name "*.pyo" -delete
+    /opt/venv/bin/pip install --no-cache-dir -r worker-requirements.txt
 
 # ============================================
 # Stage 2: Runtime - Minimal production image
