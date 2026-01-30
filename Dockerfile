@@ -55,8 +55,9 @@ COPY entrypoint.sh /app/entrypoint.sh
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 # Set permissions and create directories in one layer
+# Create both /data (for HF Spaces) and /app/data (fallback)
 RUN chmod +x /app/entrypoint.sh && \
-    mkdir -p /var/log/supervisor /var/run /app/data/db /app/data/papers && \
+    mkdir -p /var/log/supervisor /var/run /data/db /data/papers /app/data/db /app/data/papers && \
     find /app/src -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true && \
     find /app/src -type f -name "*.pyc" -delete
 

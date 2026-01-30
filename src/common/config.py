@@ -3,7 +3,14 @@ import os
 class Config:
     # Paths
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    DATA_DIR = os.path.join(os.path.dirname(BASE_DIR), "data")
+    
+    # Use /data for HuggingFace Spaces (persistent volume), /app/data otherwise
+    # HF Spaces sets SPACE_ID environment variable
+    if os.getenv("SPACE_ID") or os.getenv("HF_SPACE"):
+        DATA_DIR = "/data"
+    else:
+        DATA_DIR = os.path.join(os.path.dirname(BASE_DIR), "data")
+    
     PAPERS_DIR = os.path.join(DATA_DIR, "papers")
     DB_DIR = os.path.join(DATA_DIR, "db")
 
