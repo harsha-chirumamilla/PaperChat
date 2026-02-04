@@ -35,10 +35,11 @@ def run_query(question: str):
     # Show citations
     citations = rag.get_citations(question)
     if citations:
-        print("\nSOURCES:")
-        for i, cite in enumerate(citations, 1):
-            print(f"[{i}] {cite['title']}")
-            print(f"arXiv: {cite['arxiv_id']} - {cite['url']}")
+        print("\nREFERENCES:")
+        for cite in citations:
+            print(f"[{cite['number']}] {cite['title']}")
+            print(f"    arXiv: {cite['arxiv_id']}")
+            print(f"    URL: {cite['url']}")
             print()
 
 def main():

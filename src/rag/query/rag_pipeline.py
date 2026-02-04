@@ -315,14 +315,14 @@ class RAGSystem:
 
     def get_citations(self, user_query: str) -> List[Dict]:
         """
-        Returns citations for a given query.
+        Returns deduplicated citations with sequential numbering.
         Uses cached results if available to avoid re-retrieval.
         
         Args:
             user_query: User's question
             
         Returns:
-            List of citation dictionaries
+            List of numbered citation dictionaries without repetitions
         """
         # Use cached results if available (saves 1-2s)
         if self._last_query == user_query and self._last_results:
@@ -334,15 +334,28 @@ class RAGSystem:
             retrieved_docs = self.retriever.retrieve(user_query)
             reranked_docs = self.reranker.rerank(user_query, retrieved_docs)
 
+        # Deduplicate by arxiv_id to avoid repeated citations
+        seen_arxiv_ids = set()
         citations = []
+        citation_number = 1
+        
         for doc in reranked_docs:
+            arxiv_id = doc.metadata.get("source", "N/A")
+            
+            # Skip if we've already cited this paper
+            if arxiv_id in seen_arxiv_ids:
+                continue
+                
+            seen_arxiv_ids.add(arxiv_id)
             citations.append(
                 {
+                    "number": citation_number,
                     "title": doc.metadata.get("title", "Unknown"),
-                    "arxiv_id": doc.metadata.get("source", "N/A"),
+                    "arxiv_id": arxiv_id,
                     "url": doc.metadata.get("url", "N/A"),
                     "snippet": doc.page_content[:200] + "...",
                 }
             )
+            citation_number += 1
 
         return citations
