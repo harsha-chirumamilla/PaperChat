@@ -165,6 +165,9 @@ jobs:
         # Upload src directory
         hf upload $HF_SPACE src/ src --repo-type=space --commit-message="Update source code"
         
+        # Upload static directory (Web UI)
+        hf upload $HF_SPACE static/ static --repo-type=space --commit-message="Update static files"
+        
         echo "Files uploaded successfully to $HF_SPACE"
     
     - name: Configure HF Space Secrets
