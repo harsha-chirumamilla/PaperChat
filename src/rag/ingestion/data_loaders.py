@@ -71,5 +71,6 @@ class ArxivLoader:
                 "published": str(result.published),
                 "url": result.entry_id
             })
-            
+        logger.info("Total papers fetched: %d", len(papers_metadata))
+        logger.debug("Papers metadata: %s", papers_metadata)
         return papers_metadata

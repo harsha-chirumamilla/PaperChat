@@ -3,13 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
 from fastapi.responses import StreamingResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 from celery.result import AsyncResult
 from src.worker.celery_app import celery_app
 from src.common.models import QueryRequest, QueryResponse, IngestRequest, IngestResponse, TaskStatusResponse
 from src.api.auth import (
-    oauth, get_current_user, require_auth, create_access_token, 
+    oauth, get_current_user, require_auth, create_access_token, create_refresh_token,
     save_user_session, revoke_user_session, get_oauth_user, User,
-    CALLBACK_URL_BASE
+    CALLBACK_URL_BASE, SECRET_KEY
 )
 import os
 import json
@@ -19,6 +20,13 @@ app = FastAPI(title="PaperChat API", version="2.0.0", docs_url='/docs')
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Add SessionMiddleware for OAuth (required by authlib)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=SECRET_KEY,
+    max_age=3600  # 1 hour session for OAuth state
+)
 
 app.add_middleware(
     CORSMiddleware,

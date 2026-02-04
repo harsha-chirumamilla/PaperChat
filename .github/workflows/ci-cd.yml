@@ -52,7 +52,17 @@ jobs:
         GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         
+        # Authentication (Secrets)
+        JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+        GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+        GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+        MICROSOFT_CLIENT_ID: ${{ secrets.MICROSOFT_CLIENT_ID }}
+        MICROSOFT_CLIENT_SECRET: ${{ secrets.MICROSOFT_CLIENT_SECRET }}
+        GITHUB_CLIENT_ID: ${{ secrets.GITHUB_CLIENT_ID }}
+        GITHUB_CLIENT_SECRET: ${{ secrets.GITHUB_CLIENT_SECRET }}
+        
         # Configuration (Variables)
+        CALLBACK_URL_BASE: ${{ vars.CALLBACK_URL_BASE }}
         MODEL_PROVIDER: ${{ vars.MODEL_PROVIDER }}
         OPENAI_MODEL_ID: ${{ vars.OPENAI_MODEL_ID }}
         GEMINI_MODEL_ID: ${{ vars.GEMINI_MODEL_ID }}
@@ -175,6 +185,13 @@ jobs:
             "OPENAI_API_KEY": """${{ secrets.OPENAI_API_KEY }}""",
             "GEMINI_API_KEY": """${{ secrets.GEMINI_API_KEY }}""",
             "ANTHROPIC_API_KEY": """${{ secrets.ANTHROPIC_API_KEY }}""",
+            "JWT_SECRET_KEY": """${{ secrets.JWT_SECRET_KEY }}""",
+            "GOOGLE_CLIENT_ID": """${{ secrets.GOOGLE_CLIENT_ID }}""",
+            "GOOGLE_CLIENT_SECRET": """${{ secrets.GOOGLE_CLIENT_SECRET }}""",
+            "MICROSOFT_CLIENT_ID": """${{ secrets.MICROSOFT_CLIENT_ID }}""",
+            "MICROSOFT_CLIENT_SECRET": """${{ secrets.MICROSOFT_CLIENT_SECRET }}""",
+            "GITHUB_CLIENT_ID": """${{ secrets.GITHUB_CLIENT_ID }}""",
+            "GITHUB_CLIENT_SECRET": """${{ secrets.GITHUB_CLIENT_SECRET }}""",
         }
         
         for key, value in secrets_dict.items():
@@ -184,6 +201,7 @@ jobs:
         
         # Set variables
         variables_dict = {
+            "CALLBACK_URL_BASE": """${{ vars.CALLBACK_URL_BASE }}""",
             "MODEL_PROVIDER": """${{ vars.MODEL_PROVIDER }}""",
             "OPENAI_MODEL_ID": """${{ vars.OPENAI_MODEL_ID }}""",
             "GEMINI_MODEL_ID": """${{ vars.GEMINI_MODEL_ID }}""",
