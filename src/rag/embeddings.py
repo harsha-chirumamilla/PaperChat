@@ -34,7 +34,7 @@ def get_embedding_function():
                 model_kwargs = {'device': device}
                 if device == 'cuda':
                     import torch
-                    model_kwargs['model_kwargs'] = {'torch_dtype': torch.float16}
+                    model_kwargs['model_kwargs'] = {'dtype': torch.float16}
                     logger.info("Using FP16 precision for faster inference")
                 
                 _embedding_cache = HuggingFaceEmbeddings(

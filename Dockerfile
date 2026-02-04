@@ -51,6 +51,7 @@ ENV VIRTUAL_ENV=/app/venv \
 
 # Copy application code
 COPY src ./src
+COPY static ./static
 COPY entrypoint.sh /app/entrypoint.sh
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 

@@ -11,21 +11,22 @@ from src.rag.vector_db import VectorDatabase
 logger = logging.getLogger(__name__)
 
 
-def run_ingestion(category: str, max_papers: int):
+def run_ingestion(category: str, max_papers: int, skip_papers: int = 0):
     """
     Downloads papers from arXiv, processes them, and stores in vector DB.
 
     Args:
         category: arXiv category query (e.g., "cat:cs.AI")
         max_papers: Maximum number of papers to fetch
+        skip_papers: Number of papers to skip (for pagination)
     """
     logger.info("="*80)
-    logger.info("INGESTION MODE: Fetching %d papers from '%s'", max_papers, category)
+    logger.info("INGESTION MODE: Fetching %d papers from '%s' (skip: %d)", max_papers, category, skip_papers)
     logger.info("="*80)
 
     # Step 1: Download papers
     loader = ArxivLoader()
-    papers = loader.fetch_papers(query=category, max_results=max_papers)
+    papers = loader.fetch_papers(query=category, max_results=max_papers, skip_papers=skip_papers)
 
     if not papers:
         logger.warning("No papers fetched. Exiting")

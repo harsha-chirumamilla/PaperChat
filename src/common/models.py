@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional, Any
 
 class QueryRequest(BaseModel):
@@ -16,7 +16,8 @@ class IngestRequest(BaseModel):
     # Improvement plan mentions "POST /api/v1/ingest/arxiv - Batch download"
     arxiv_ids: Optional[List[str]] = None
     query: Optional[str] = "cat:cs.AI"
-    max_results: int = 5
+    max_results: int = Field(default=5, ge=1, le=1000000)
+    skip_papers: int = Field(default=0, ge=0, le=1000000)
 
 class IngestResponse(BaseModel):
     task_id: str

@@ -13,21 +13,40 @@ class ArxivLoader:
         os.makedirs(self.download_dir, exist_ok=True)
         self.client = arxiv.Client()
 
-    def fetch_papers(self, query: str = "cat:cs.AI", max_results: int = 5) -> List[Dict]:
+    def fetch_papers(self, query: str = "cat:cs.AI", max_results: int = 5, skip_papers: int = 0) -> List[Dict]:
         """
         Fetches papers from arXiv matching the query.
         Returns a list of metadata dictionaries.
         Downloads the PDF if not already present.
+        
+        Args:
+            query: arXiv query string
+            max_results: Maximum number of papers to fetch
+            skip_papers: Number of papers to skip (for pagination)
         """
+        # Fetch more results to account for skipping
+        total_to_fetch = max_results + skip_papers
+        
         search = arxiv.Search(
             query=query,
-            max_results=max_results,
+            max_results=total_to_fetch,
             sort_by=arxiv.SortCriterion.SubmittedDate
         )
         
         papers_metadata = []
+        skipped = 0
         
         for result in self.client.results(search):
+            # Skip first N papers
+            if skipped < skip_papers:
+                skipped += 1
+                logger.info("Skipping paper %d: %s", skipped, result.title)
+                continue
+            
+            # Stop if we have enough papers
+            if len(papers_metadata) >= max_results:
+                break
+            
             paper_id = result.entry_id.split('/')[-1]
             filename = f"{paper_id}.pdf"
             filepath = os.path.join(self.download_dir, filename)

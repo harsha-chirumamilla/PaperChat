@@ -64,11 +64,11 @@ def process_query(self, query: str):
     return result
 
 @celery_app.task(bind=True)
-def ingest_documents(self, query: str = "cat:cs.AI", max_results: int = 5):
-    logger.info("Ingesting documents for query: %s", query)
+def ingest_documents(self, query: str = "cat:cs.AI", max_results: int = 5, skip_papers: int = 0):
+    logger.info("Ingesting documents for query: %s (max: %d, skip: %d)", query, max_results, skip_papers)
     try:
         loader = ArxivLoader()
-        papers = loader.fetch_papers(query=query, max_results=max_results)
+        papers = loader.fetch_papers(query=query, max_results=max_results, skip_papers=skip_papers)
         
         all_chunks = []
         for paper in papers:

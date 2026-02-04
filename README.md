@@ -50,12 +50,15 @@ A scalable, API-based Retrieval-Augmented Generation (RAG) system that indexes c
 
 ## ✨ Features
 
+- **Professional Web UI**: Modern browser-based interface for querying and ingestion
+- **OAuth Authentication**: Secure login with Google, Microsoft, or GitHub
+- **Session Management**: 24-hour JWT sessions with Redis storage
 - **Multi-Provider LLM Support**: OpenAI, Anthropic, or Gemini via API
 - **GPU-Accelerated Embeddings**: Optimized for CUDA-enabled devices
 - **Hybrid Retrieval**: BM25 + Vector search with CrossEncoder reranking
 - **arXiv Integration**: Automatic paper download and processing
 - **Async Task Processing**: Celery workers with Redis caching
-- **REST API**: FastAPI server for scalable deployment
+- **REST API**: FastAPI server for programmatic access
 - **Docker Support**: Reproducible containerized environment
 
 ## 🧰 Technology Stack
@@ -101,7 +104,25 @@ GEMINI_API_KEY=your_gemini_api_key_here
 # Celery configuration
 CELERY_BROKER_URL=redis://redis:6379/0
 CELERY_RESULT_BACKEND=redis://redis:6379/0
+
+# Authentication (OAuth - at least one provider required)
+JWT_SECRET_KEY=your-super-secret-jwt-key-change-this
+CALLBACK_URL_BASE=http://localhost:7860
+
+# Google OAuth (optional)
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+
+# Microsoft OAuth (optional)
+MICROSOFT_CLIENT_ID=your-microsoft-client-id
+MICROSOFT_CLIENT_SECRET=your-microsoft-client-secret
+
+# GitHub OAuth (optional)
+GITHUB_CLIENT_ID=your-github-client-id
+GITHUB_CLIENT_SECRET=your-github-client-secret
 ```
+
+**Note**: See [docs/AUTHENTICATION.md](docs/AUTHENTICATION.md) for OAuth provider setup instructions.
 
 ### 2. Build and Start Services
 
@@ -115,21 +136,33 @@ This starts:
 - Celery Worker (document processing & queries)
 - FastAPI Server (REST API on port 8000)
 
-### 3. Ingest arXiv Papers
+### 3. Access the Web UI
 
-Using the CLI:
-```bash
-docker-compose exec worker python src/ingestion_entrypoint.py \
-  --category "cat:cs.AI" \
-  --max-papers 10
+Open your browser and navigate to:
+```
+http://localhost:8000
 ```
 
-Or via API:
-```bash
-curl -X POST http://localhost:8000/api/v1/ingest \
-  -H "Content-Type: application/json" \
-  -d '{"query": "cat:cs.AI", "max_results": 10}'
-```
+**First-time setup**:
+1. You'll see a login modal with OAuth provider buttons
+2. Click your preferred provider (Google, Microsoft, or GitHub)
+3. Complete OAuth authorization
+4. You'll be redirected back and automatically logged in
+
+The web interface provides:
+- **Query Papers**: Submit research questions and get answers with citations
+- **Ingest Papers**: Add new papers from arXiv to the database
+- **About**: System information and API documentation
+
+Your session lasts 24 hours. Click "Logout" in the header to end your session.
+
+### 4. Ingest arXiv Papers
+
+**Using Web UI**:
+1. Go to http://localhost:8000
+2. Click "Ingest Papers" tab
+3. Enter category (e.g., `cat:cs.AI`), max papers, and optional skip count
+4. Click "Start Ingestion"
 
 **Popular categories:**
 - `cat:cs.LG` - Machine Learning
@@ -137,24 +170,18 @@ curl -X POST http://localhost:8000/api/v1/ingest \
 - `cat:cs.CV` - Computer Vision
 - `cat:cs.AI` - Artificial Intelligence
 
-### 4. Query the System
+**Pagination**: Use the "Skip Papers" field to process papers in batches:
+- First batch (papers 1-10): Skip = 0, Max = 10
+- Second batch (papers 11-20): Skip = 10, Max = 10
+- Third batch (papers 21-30): Skip = 20, Max = 10
 
-Using the CLI:
-```bash
-docker-compose exec worker python src/query.py \
-  --question "What are transformer attention mechanisms?"
-```
+### 5. Query the System
 
-Or via API:
-```bash
-# Submit query
-curl -X POST http://localhost:8000/api/v1/query \
-  -H "Content-Type: application/json" \
-  -d '{"query": "What are transformer attention mechanisms?"}'
-
-# Get results (replace {task_id} with response from above)
-curl http://localhost:8000/api/v1/query/{task_id}
-```
+**Using Web UI**:
+1. Go to http://localhost:8000
+2. Enter your question in the text area
+3. Click "Submit Query"
+4. View answer with inline citations and references
 
 ## 🔧 Configuration
 
@@ -187,7 +214,9 @@ class Config:
     CHUNK_OVERLAP = 200
 ```
 
-## 🎯 API Endpoints
+## 🎯 API Endpoints (For Programmatic Access)
+
+The REST API is available for programmatic integration. For most users, the Web UI at http://localhost:8000 is recommended.
 
 ### Health Check
 ```bash
@@ -220,6 +249,7 @@ Response:
     "answer": "Transformers are neural network architectures...",
     "citations": [
       {
+        "number": 1,
         "title": "Attention Is All You Need",
         "arxiv_id": "1706.03762",
         "url": "https://arxiv.org/abs/1706.03762",
@@ -235,7 +265,8 @@ Response:
 POST /api/v1/ingest
 {
   "query": "cat:cs.AI",
-  "max_results": 10
+  "max_results": 10,
+  "skip_papers": 0
 }
 ```
 
@@ -322,18 +353,8 @@ docker-compose up -d
 ```
 
 ### "No relevant documents found"
-```bash
-# Verify documents were ingested
-docker-compose exec worker python -c "
-from src.rag.vector_db import VectorDatabase
-db = VectorDatabase()
-print(f'Documents in DB: {len(db.get_all_documents())}')
-"
 
-# If empty, run ingestion first
-docker-compose exec worker python src/ingestion_entrypoint.py \
-  --category "cat:cs.AI" --max-papers 10
-```
+This means no papers have been ingested yet. Go to http://localhost:8000, click the "Ingest Papers" tab, and add papers to the database.
 
 ### Connection errors
 ```bash
