@@ -91,6 +91,35 @@
                     </form>
                 </div>
 
+                <div class="card">
+                    <h2>Upload a PDF Paper</h2>
+                    <form id="upload-form">
+                        <div class="form-group">
+                            <label for="pdf-file">Select PDF File</label>
+                            <input 
+                                type="file" 
+                                id="pdf-file" 
+                                name="pdf-file" 
+                                accept=".pdf"
+                                required
+                            >
+                            <small class="help-text">Upload your own research paper for querying</small>
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="upload-submit">
+                            <span class="btn-text">Upload Paper</span>
+                            <span class="loader" style="display: none;"></span>
+                        </button>
+                    </form>
+                </div>
+
+                <div id="upload-results" class="card" style="display: none;">
+                    <div class="result-header">
+                        <h2>Upload Status</h2>
+                        <span class="status-badge" id="upload-status-badge"></span>
+                    </div>
+                    <div id="upload-content" class="status-section"></div>
+                </div>
+
                 <!-- Chat History -->
                 <div id="chat-history" class="card" style="display: none;">
                     <h2>Conversation History</h2>
@@ -165,27 +194,6 @@
 
                         <button type="submit" class="btn btn-primary" id="ingest-submit">
                             <span class="btn-text">Start Ingestion</span>
-                            <span class="loader" style="display: none;"></span>
-                        </button>
-                    </form>
-                </div>
-
-                <div class="card">
-                    <h2>Upload a PDF Paper</h2>
-                    <form id="upload-form">
-                        <div class="form-group">
-                            <label for="pdf-file">Select PDF File</label>
-                            <input 
-                                type="file" 
-                                id="pdf-file" 
-                                name="pdf-file" 
-                                accept=".pdf"
-                                required
-                            >
-                            <small class="help-text">Upload your own research paper for querying</small>
-                        </div>
-                        <button type="submit" class="btn btn-primary" id="upload-submit">
-                            <span class="btn-text">Upload Paper</span>
                             <span class="loader" style="display: none;"></span>
                         </button>
                     </form>

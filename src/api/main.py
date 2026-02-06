@@ -402,3 +402,16 @@ async def suggest_questions(
     except Exception as e:
         logger.error("Question suggestion failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/v1/suggest-questions/{task_id}", response_model=TaskStatusResponse)
+async def get_suggested_questions(task_id: str, user: User = Depends(require_auth)):
+    """Get suggested questions result (requires authentication)"""
+    task_result = AsyncResult(task_id)
+    if task_result.state == 'PENDING':
+        return TaskStatusResponse(task_id=task_id, status="processing")
+    elif task_result.state == 'SUCCESS':
+        return TaskStatusResponse(task_id=task_id, status="completed", result=task_result.result)
+    elif task_result.state == 'FAILURE':
+        return TaskStatusResponse(task_id=task_id, status="failed", error=str(task_result.result))
+    else:
+        return TaskStatusResponse(task_id=task_id, status=task_result.state)

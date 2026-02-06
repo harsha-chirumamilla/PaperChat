@@ -42,13 +42,17 @@ class PDFProcessor:
         if use_hierarchical is None:
             use_hierarchical = Config.USE_HIERARCHICAL_CHUNKING
         
+        source_id = metadata.get("id") or metadata.get("arxiv_id") or metadata.get("source") or "unknown"
+        title = metadata.get("title", "Untitled")
+        url = metadata.get("url", "")
+
         # Use hierarchical chunking for structured documents
         if use_hierarchical:
             chunker = HierarchicalChunker()
             base_meta = {
-                "source": metadata["id"],
-                "title": metadata["title"],
-                "url": metadata["url"]
+                "source": source_id,
+                "title": title,
+                "url": url
             }
             return chunker.create_hierarchical_chunks(
                 text,
@@ -80,10 +84,10 @@ class PDFProcessor:
         for i, t in enumerate(texts):
             # Clean up keys for metadata to ensure compatibility
             clean_meta = {
-                "source": metadata["id"],
-                "title": metadata["title"],
+                "source": source_id,
+                "title": title,
                 "chunk_id": i,
-                "url": metadata["url"]
+                "url": url
             }
             chunks.append(LangChainDocument(page_content=t, metadata=clean_meta))
             

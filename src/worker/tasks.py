@@ -6,6 +6,7 @@ from src.rag.vector_db import VectorDatabase
 import os
 import threading
 import logging
+from pathlib import Path
 
 import redis
 import json
@@ -105,8 +106,10 @@ def process_uploaded_pdf(self, file_path: str, filename: str):
         text = PDFProcessor.extract_text(file_path)
         
         # Create metadata for uploaded paper
+        paper_id = f"upload:{Path(filename).stem}"
         paper_metadata = {
-            "title": filename.replace('.pdf', ''),
+            "id": paper_id,
+            "title": Path(filename).stem,
             "source": "uploaded",
             "arxiv_id": "N/A",
             "url": "N/A",

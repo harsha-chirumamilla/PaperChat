@@ -240,7 +240,7 @@ document.getElementById('query-form').addEventListener('submit', async (e) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
                     query: question,
-                    chat_history: chatHistory
+                    chat_history: buildChatHistoryPayload()
                 })
             });
             
@@ -301,7 +301,7 @@ async function streamQuery(question) {
             },
             body: JSON.stringify({ 
                 query: question,
-                chat_history: chatHistory
+                chat_history: buildChatHistoryPayload()
             })
         });
         
@@ -471,6 +471,13 @@ function addToChatHistory(query, answer, citations) {
     displayChatHistory();
 }
 
+function buildChatHistoryPayload() {
+    return chatHistory.map(item => ({
+        query: String(item.query || ''),
+        answer: String(item.answer || '')
+    }));
+}
+
 function displayChatHistory() {
     const historyDiv = document.getElementById('chat-history');
     const historyList = document.getElementById('chat-history-list');
@@ -510,7 +517,7 @@ async function generateSuggestedQuestions(query, answer) {
             body: JSON.stringify({
                 current_query: query,
                 answer: answer,
-                chat_history: chatHistory
+                chat_history: buildChatHistoryPayload()
             })
         });
         
@@ -538,7 +545,7 @@ async function pollSuggestedQuestions(taskId) {
         await new Promise(resolve => setTimeout(resolve, 1000));
         
         try {
-            const response = await authenticatedFetch(`/api/v1/ingest/${taskId}`);
+            const response = await authenticatedFetch(`/api/v1/suggest-questions/${taskId}`);
             const data = await response.json();
             
             if (data.status === 'completed') {
@@ -747,7 +754,7 @@ document.getElementById('upload-form').addEventListener('submit', async (e) => {
     const submitBtn = document.getElementById('upload-submit');
     const btnText = submitBtn.querySelector('.btn-text');
     const loader = submitBtn.querySelector('.loader');
-    const resultsDiv = document.getElementById('ingest-results');
+    const resultsDiv = document.getElementById('upload-results');
     
     if (!file) {
         alert('Please select a PDF file');
@@ -790,9 +797,9 @@ document.getElementById('upload-form').addEventListener('submit', async (e) => {
         
         // Show results card
         resultsDiv.style.display = 'block';
-        document.getElementById('ingest-status-badge').textContent = 'Processing';
-        document.getElementById('ingest-status-badge').className = 'status-badge processing';
-        document.getElementById('ingest-content').innerHTML = `
+        document.getElementById('upload-status-badge').textContent = 'Processing';
+        document.getElementById('upload-status-badge').className = 'status-badge processing';
+        document.getElementById('upload-content').innerHTML = `
             <div class="status-item">
                 <span class="status-label">Status:</span>
                 <span class="status-value">Processing uploaded PDF...</span>
@@ -812,9 +819,9 @@ document.getElementById('upload-form').addEventListener('submit', async (e) => {
     } catch (error) {
         console.error('Error:', error);
         resultsDiv.style.display = 'block';
-        document.getElementById('ingest-status-badge').textContent = 'Failed';
-        document.getElementById('ingest-status-badge').className = 'status-badge failed';
-        document.getElementById('ingest-content').innerHTML = `
+        document.getElementById('upload-status-badge').textContent = 'Failed';
+        document.getElementById('upload-status-badge').className = 'status-badge failed';
+        document.getElementById('upload-content').innerHTML = `
             <p style="color: var(--error-color);">Error: ${error.message}</p>
         `;
     } finally {
@@ -852,8 +859,8 @@ async function pollUploadResults(taskId, filename) {
 }
 
 function displayUploadResults(result, filename) {
-    const statusBadge = document.getElementById('ingest-status-badge');
-    const ingestContent = document.getElementById('ingest-content');
+    const statusBadge = document.getElementById('upload-status-badge');
+    const ingestContent = document.getElementById('upload-content');
     
     const isSuccess = result.status === 'success';
     
