@@ -1,10 +1,11 @@
 from pydantic import BaseModel, Field
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Dict
 
 class QueryRequest(BaseModel):
     query: str
     top_k: int = 5
     use_cache: bool = True
+    chat_history: Optional[List[Dict[str, str]]] = None
 
 class QueryResponse(BaseModel):
     task_id: str
@@ -28,3 +29,12 @@ class TaskStatusResponse(BaseModel):
     status: str
     result: Optional[Any] = None
     error: Optional[str] = None
+
+class SuggestQuestionsRequest(BaseModel):
+    current_query: str
+    answer: str
+    chat_history: Optional[List[Dict[str, str]]] = None
+
+class SuggestQuestionsResponse(BaseModel):
+    task_id: str
+    status: str

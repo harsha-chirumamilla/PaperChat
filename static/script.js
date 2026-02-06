@@ -4,6 +4,9 @@ let refreshToken = null;
 let currentUser = null;
 let isRefreshing = false;
 
+// Chat History State
+let chatHistory = [];
+
 // Initialize app
 document.addEventListener('DOMContentLoaded', async () => {
     // Check for tokens in URL (from OAuth callback)
@@ -33,6 +36,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             await loadUser();
         } else {
             showLoginModal();
+        }
+    }
+    
+    // Load chat history from localStorage
+    const savedHistory = localStorage.getItem('chat_history');
+    if (savedHistory) {
+        try {
+            chatHistory = JSON.parse(savedHistory);
+            displayChatHistory();
+        } catch (e) {
+            console.error('Failed to load chat history:', e);
         }
     }
 });
@@ -200,6 +214,7 @@ document.getElementById('query-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     
     const question = document.getElementById('question').value.trim();
+    const enableStreaming = document.getElementById('enable-streaming').checked;
     const submitBtn = document.getElementById('query-submit');
     const btnText = submitBtn.querySelector('.btn-text');
     const loader = submitBtn.querySelector('.loader');
@@ -212,31 +227,40 @@ document.getElementById('query-form').addEventListener('submit', async (e) => {
     btnText.textContent = 'Processing...';
     loader.style.display = 'inline-block';
     resultsDiv.style.display = 'none';
+    document.getElementById('suggested-questions').style.display = 'none';
     
     try {
-        // Submit query
-        const response = await authenticatedFetch('/api/v1/query', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ query: question })
-        });
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+        if (enableStreaming) {
+            // Use streaming endpoint
+            await streamQuery(question);
+        } else {
+            // Use traditional polling endpoint
+            const response = await authenticatedFetch('/api/v1/query', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    query: question,
+                    chat_history: chatHistory
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const data = await response.json();
+            const taskId = data.task_id;
+            
+            // Show results card
+            resultsDiv.style.display = 'block';
+            document.getElementById('status-badge').textContent = 'Processing';
+            document.getElementById('status-badge').className = 'status-badge processing';
+            document.getElementById('answer-content').innerHTML = '<p>Retrieving and analyzing papers...</p>';
+            document.getElementById('citations-section').style.display = 'none';
+            
+            // Poll for results
+            await pollQueryResults(taskId, question);
         }
-        
-        const data = await response.json();
-        const taskId = data.task_id;
-        
-        // Show results card
-        resultsDiv.style.display = 'block';
-        document.getElementById('status-badge').textContent = 'Processing';
-        document.getElementById('status-badge').className = 'status-badge processing';
-        document.getElementById('answer-content').innerHTML = '<p>Retrieving and analyzing papers...</p>';
-        document.getElementById('citations-section').style.display = 'none';
-        
-        // Poll for results
-        await pollQueryResults(taskId);
         
     } catch (error) {
         console.error('Error:', error);
@@ -251,7 +275,118 @@ document.getElementById('query-form').addEventListener('submit', async (e) => {
     }
 });
 
-async function pollQueryResults(taskId) {
+async function streamQuery(question) {
+    const resultsDiv = document.getElementById('results');
+    const statusBadge = document.getElementById('status-badge');
+    const answerContent = document.getElementById('answer-content');
+    const citationsSection = document.getElementById('citations-section');
+    const citationsList = document.getElementById('citations-list');
+    
+    // Show results card
+    resultsDiv.style.display = 'block';
+    statusBadge.textContent = 'Streaming';
+    statusBadge.className = 'status-badge processing';
+    answerContent.innerHTML = '';
+    citationsSection.style.display = 'none';
+    
+    let fullAnswer = '';
+    let citations = [];
+    
+    try {
+        const response = await fetch('/api/v1/query/stream', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({ 
+                query: question,
+                chat_history: chatHistory
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            const chunk = decoder.decode(value);
+            const lines = chunk.split('\n');
+            
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    const data = line.slice(6);
+                    if (data === '[DONE]') break;
+                    
+                    try {
+                        const event = JSON.parse(data);
+                        
+                        if (event.type === 'start') {
+                            answerContent.innerHTML = '<p class="streaming-indicator">Generating answer...</p>';
+                        } else if (event.type === 'sources') {
+                            statusBadge.textContent = 'Generating';
+                        } else if (event.type === 'answer_start') {
+                            answerContent.innerHTML = '';
+                        } else if (event.type === 'chunk') {
+                            fullAnswer += event.content;
+                            answerContent.innerHTML = formatAnswer(fullAnswer) + '<span class="cursor">|</span>';
+                        } else if (event.type === 'citations') {
+                            citations = event.data;
+                        } else if (event.type === 'done') {
+                            statusBadge.textContent = 'Completed';
+                            statusBadge.className = 'status-badge completed';
+                            answerContent.innerHTML = formatAnswer(fullAnswer);
+                            
+                            // Display citations
+                            if (citations.length > 0) {
+                                citationsSection.style.display = 'block';
+                                citationsList.innerHTML = citations.map(citation => `
+                                    <div class="citation-item">
+                                        <div style="display: flex; align-items: start;">
+                                            <span class="citation-number">${citation.number}</span>
+                                            <div style="flex: 1;">
+                                                <div class="citation-title">${citation.title}</div>
+                                                <div class="citation-meta">
+                                                    arXiv: <a href="${citation.url}" target="_blank" class="citation-link">${citation.arxiv_id}</a>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `).join('');
+                            }
+                            
+                            // Add to chat history
+                            addToChatHistory(question, fullAnswer, citations);
+                            
+                            // Generate suggested questions
+                            await generateSuggestedQuestions(question, fullAnswer);
+                        } else if (event.type === 'error') {
+                            throw new Error(event.message);
+                        }
+                    } catch (e) {
+                        // Ignore JSON parse errors for incomplete chunks
+                        if (!(e instanceof SyntaxError)) {
+                            throw e;
+                        }
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        statusBadge.textContent = 'Failed';
+        statusBadge.className = 'status-badge failed';
+        answerContent.innerHTML = `<p style="color: var(--error-color);">Error: ${error.message}</p>`;
+        throw error;
+    }
+}
+
+async function pollQueryResults(taskId, question) {
     const maxAttempts = 60;
     let attempts = 0;
     
@@ -263,7 +398,7 @@ async function pollQueryResults(taskId) {
             const data = await response.json();
             
             if (data.status === 'completed') {
-                displayQueryResults(data.result);
+                displayQueryResults(data.result, question);
                 return;
             } else if (data.status === 'failed') {
                 throw new Error(data.error || 'Query processing failed');
@@ -278,7 +413,7 @@ async function pollQueryResults(taskId) {
     throw new Error('Query timeout - please try again');
 }
 
-function displayQueryResults(result) {
+function displayQueryResults(result, question) {
     const statusBadge = document.getElementById('status-badge');
     const answerContent = document.getElementById('answer-content');
     const citationsSection = document.getElementById('citations-section');
@@ -308,6 +443,142 @@ function displayQueryResults(result) {
             </div>
         `).join('');
     }
+    
+    // Add to chat history
+    addToChatHistory(question, result.answer, result.citations);
+    
+    // Generate suggested questions
+    generateSuggestedQuestions(question, result.answer);
+}
+
+function addToChatHistory(query, answer, citations) {
+    chatHistory.push({
+        query: query,
+        answer: answer,
+        citations: citations,
+        timestamp: new Date().toISOString()
+    });
+    
+    // Keep only last 10 exchanges
+    if (chatHistory.length > 10) {
+        chatHistory = chatHistory.slice(-10);
+    }
+    
+    // Save to localStorage
+    localStorage.setItem('chat_history', JSON.stringify(chatHistory));
+    
+    // Update display
+    displayChatHistory();
+}
+
+function displayChatHistory() {
+    const historyDiv = document.getElementById('chat-history');
+    const historyList = document.getElementById('chat-history-list');
+    
+    if (chatHistory.length === 0) {
+        historyDiv.style.display = 'none';
+        return;
+    }
+    
+    historyDiv.style.display = 'block';
+    historyList.innerHTML = chatHistory.slice().reverse().map((item, index) => `
+        <div class="history-item" data-index="${chatHistory.length - 1 - index}">
+            <div class="history-query">
+                <strong>Q:</strong> ${escapeHtml(item.query)}
+            </div>
+            <div class="history-answer">
+                <strong>A:</strong> ${escapeHtml(item.answer.substring(0, 200))}${item.answer.length > 200 ? '...' : ''}
+            </div>
+            <div class="history-meta">
+                ${new Date(item.timestamp).toLocaleString()}
+                <button class="btn-link" onclick="reaskQuestion('${escapeHtml(item.query)}')">Ask Again</button>
+            </div>
+        </div>
+    `).join('');
+}
+
+function reaskQuestion(query) {
+    document.getElementById('question').value = query;
+    document.getElementById('question').scrollIntoView({ behavior: 'smooth' });
+}
+
+async function generateSuggestedQuestions(query, answer) {
+    try {
+        const response = await authenticatedFetch('/api/v1/suggest-questions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                current_query: query,
+                answer: answer,
+                chat_history: chatHistory
+            })
+        });
+        
+        if (!response.ok) {
+            console.error('Failed to generate suggestions');
+            return;
+        }
+        
+        const data = await response.json();
+        const taskId = data.task_id;
+        
+        // Poll for suggestions
+        await pollSuggestedQuestions(taskId);
+        
+    } catch (error) {
+        console.error('Error generating suggestions:', error);
+    }
+}
+
+async function pollSuggestedQuestions(taskId) {
+    const maxAttempts = 20;
+    let attempts = 0;
+    
+    while (attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        try {
+            const response = await authenticatedFetch(`/api/v1/ingest/${taskId}`);
+            const data = await response.json();
+            
+            if (data.status === 'completed') {
+                displaySuggestedQuestions(data.result.suggestions);
+                return;
+            } else if (data.status === 'failed') {
+                console.error('Suggestion generation failed');
+                return;
+            }
+            
+            attempts++;
+        } catch (error) {
+            console.error('Error polling suggestions:', error);
+            return;
+        }
+    }
+}
+
+function displaySuggestedQuestions(suggestions) {
+    if (!suggestions || suggestions.length === 0) return;
+    
+    const suggestionsDiv = document.getElementById('suggested-questions');
+    const suggestionsList = document.getElementById('suggestions-list');
+    
+    suggestionsDiv.style.display = 'block';
+    suggestionsList.innerHTML = suggestions.map((question, index) => `
+        <button class="suggestion-btn" onclick="askSuggestedQuestion('${escapeHtml(question)}')">
+            ${escapeHtml(question)}
+        </button>
+    `).join('');
+}
+
+function askSuggestedQuestion(question) {
+    // Unescape the question
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = question;
+    const unescapedQuestion = textarea.value;
+    
+    document.getElementById('question').value = unescapedQuestion;
+    document.getElementById('query-form').dispatchEvent(new Event('submit'));
 }
 
 function formatAnswer(answer) {
@@ -462,6 +733,149 @@ function displayIngestResults(result, category, maxResults, skipPapers) {
         <div style="margin-top: 16px; padding: 12px; background: var(--surface); border-radius: 8px;">
             <p style="color: var(--success-color); font-weight: 500;">
                 Papers successfully added to the database and ready for querying.
+            </p>
+        </div>
+    `;
+}
+
+// Upload Form Handler
+document.getElementById('upload-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const fileInput = document.getElementById('pdf-file');
+    const file = fileInput.files[0];
+    const submitBtn = document.getElementById('upload-submit');
+    const btnText = submitBtn.querySelector('.btn-text');
+    const loader = submitBtn.querySelector('.loader');
+    const resultsDiv = document.getElementById('ingest-results');
+    
+    if (!file) {
+        alert('Please select a PDF file');
+        return;
+    }
+    
+    // Validate file type
+    if (!file.name.endsWith('.pdf')) {
+        alert('Only PDF files are supported');
+        return;
+    }
+    
+    // Show loading state
+    submitBtn.disabled = true;
+    btnText.textContent = 'Uploading...';
+    loader.style.display = 'inline-block';
+    resultsDiv.style.display = 'none';
+    
+    try {
+        // Create FormData
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        // Upload file
+        const response = await fetch('/api/v1/upload', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: formData
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Upload failed');
+        }
+        
+        const data = await response.json();
+        const taskId = data.task_id;
+        
+        // Show results card
+        resultsDiv.style.display = 'block';
+        document.getElementById('ingest-status-badge').textContent = 'Processing';
+        document.getElementById('ingest-status-badge').className = 'status-badge processing';
+        document.getElementById('ingest-content').innerHTML = `
+            <div class="status-item">
+                <span class="status-label">Status:</span>
+                <span class="status-value">Processing uploaded PDF...</span>
+            </div>
+            <div class="status-item">
+                <span class="status-label">Filename:</span>
+                <span class="status-value">${file.name}</span>
+            </div>
+        `;
+        
+        // Poll for results
+        await pollUploadResults(taskId, file.name);
+        
+        // Clear file input
+        fileInput.value = '';
+        
+    } catch (error) {
+        console.error('Error:', error);
+        resultsDiv.style.display = 'block';
+        document.getElementById('ingest-status-badge').textContent = 'Failed';
+        document.getElementById('ingest-status-badge').className = 'status-badge failed';
+        document.getElementById('ingest-content').innerHTML = `
+            <p style="color: var(--error-color);">Error: ${error.message}</p>
+        `;
+    } finally {
+        submitBtn.disabled = false;
+        btnText.textContent = 'Upload Paper';
+        loader.style.display = 'none';
+    }
+});
+
+async function pollUploadResults(taskId, filename) {
+    const maxAttempts = 60;
+    let attempts = 0;
+    
+    while (attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        
+        try {
+            const response = await authenticatedFetch(`/api/v1/ingest/${taskId}`);
+            const data = await response.json();
+            
+            if (data.status === 'completed') {
+                displayUploadResults(data.result, filename);
+                return;
+            } else if (data.status === 'failed') {
+                throw new Error(data.error || 'Upload processing failed');
+            }
+            
+            attempts++;
+        } catch (error) {
+            throw error;
+        }
+    }
+    
+    throw new Error('Upload processing timeout');
+}
+
+function displayUploadResults(result, filename) {
+    const statusBadge = document.getElementById('ingest-status-badge');
+    const ingestContent = document.getElementById('ingest-content');
+    
+    const isSuccess = result.status === 'success';
+    
+    statusBadge.textContent = isSuccess ? 'Completed' : 'Completed with warnings';
+    statusBadge.className = `status-badge ${isSuccess ? 'completed' : 'warning'}`;
+    
+    ingestContent.innerHTML = `
+        <div class="status-item">
+            <span class="status-label">Status:</span>
+            <span class="status-value">${result.status}</span>
+        </div>
+        <div class="status-item">
+            <span class="status-label">Filename:</span>
+            <span class="status-value">${filename}</span>
+        </div>
+        <div class="status-item">
+            <span class="status-label">Chunks Added:</span>
+            <span class="status-value">${result.chunks_added || 0}</span>
+        </div>
+        <div style="margin-top: 16px; padding: 12px; background: var(--surface); border-radius: 8px;">
+            <p style="color: var(--success-color); font-weight: 500;">
+                ${result.message || 'Paper successfully processed and ready for querying.'}
             </p>
         </div>
     `;

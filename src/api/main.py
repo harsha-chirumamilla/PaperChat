@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Depends, Security, Request
+from fastapi import FastAPI, HTTPException, Depends, Security, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader
 from fastapi.responses import StreamingResponse, RedirectResponse, JSONResponse
@@ -6,7 +6,10 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from celery.result import AsyncResult
 from src.worker.celery_app import celery_app
-from src.common.models import QueryRequest, QueryResponse, IngestRequest, IngestResponse, TaskStatusResponse
+from src.common.models import (
+    QueryRequest, QueryResponse, IngestRequest, IngestResponse, 
+    TaskStatusResponse, SuggestQuestionsRequest, SuggestQuestionsResponse
+)
 from src.api.auth import (
     oauth, get_current_user, require_auth, create_access_token, create_refresh_token,
     save_user_session, revoke_user_session, get_oauth_user, User,
@@ -14,7 +17,12 @@ from src.api.auth import (
 )
 import os
 import json
-from datetime import timedelta
+import shutil
+import logging
+from datetime import timedelta, datetime, timezone
+from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="PaperChat API", version="2.0.0", docs_url='/docs')
 
@@ -115,7 +123,7 @@ async def refresh_token_endpoint(request: Request):
         
         if last_activity:
             last_activity_time = datetime.fromisoformat(last_activity)
-            inactive_minutes = (datetime.utcnow() - last_activity_time).total_seconds() / 60
+            inactive_minutes = (datetime.now(timezone.utc) - last_activity_time).total_seconds() / 60
             
             if inactive_minutes > INACTIVITY_TIMEOUT_MINUTES:
                 # Session expired - force re-login
@@ -134,7 +142,7 @@ async def refresh_token_endpoint(request: Request):
         redis_client.setex(
             activity_key,
             REFRESH_TOKEN_EXPIRE_MINUTES * 60,
-            datetime.utcnow().isoformat()
+            datetime.now(timezone.utc).isoformat()
         )
         
         return {
@@ -300,6 +308,10 @@ async def stream_query(request: QueryRequest, user: User = Depends(require_auth)
                 # Send each chunk as SSE event
                 yield f"data: {json.dumps({'type': 'chunk', 'content': chunk})}\n\n"
             
+            # Send citations
+            citations = rag_system.get_citations(request.query)
+            yield f"data: {json.dumps({'type': 'citations', 'data': citations})}\n\n"
+            
             # Send completion signal
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
             yield "data: [DONE]\n\n"
@@ -315,4 +327,78 @@ async def stream_query(request: QueryRequest, user: User = Depends(require_auth)
         )
     
     except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/upload", response_model=IngestResponse)
+async def upload_paper(
+    file: UploadFile = File(...),
+    user: User = Depends(require_auth)
+):
+    """
+    Upload a PDF paper for ingestion (requires authentication).
+    
+    Args:
+        file: PDF file to upload
+        user: Authenticated user
+        
+    Returns:
+        Task ID for processing the uploaded paper
+    """
+    try:
+        # Validate file type
+        if not file.filename.endswith('.pdf'):
+            raise HTTPException(
+                status_code=400,
+                detail="Only PDF files are supported"
+            )
+        
+        # Create uploads directory if it doesn't exist
+        from src.common.config import Config
+        uploads_dir = Path(Config.DATA_DIR) / "uploads"
+        uploads_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Save uploaded file
+        file_path = uploads_dir / file.filename
+        with file_path.open("wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        
+        # Submit processing task
+        task = celery_app.send_task(
+            "src.worker.tasks.process_uploaded_pdf",
+            args=[str(file_path), file.filename]
+        )
+        
+        return IngestResponse(task_id=task.id, status="processing")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Upload failed: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/v1/suggest-questions", response_model=SuggestQuestionsResponse)
+async def suggest_questions(
+    request: SuggestQuestionsRequest,
+    user: User = Depends(require_auth)
+):
+    """
+    Generate suggested follow-up questions (requires authentication).
+    
+    Args:
+        request: Contains current query, answer, and chat history
+        user: Authenticated user
+        
+    Returns:
+        Task ID for generating suggestions
+    """
+    try:
+        task = celery_app.send_task(
+            "src.worker.tasks.generate_suggested_questions",
+            args=[request.current_query, request.answer, request.chat_history or []]
+        )
+        
+        return SuggestQuestionsResponse(task_id=task.id, status="processing")
+        
+    except Exception as e:
+        logger.error("Question suggestion failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))

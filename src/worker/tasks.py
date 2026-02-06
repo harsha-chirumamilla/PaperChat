@@ -86,3 +86,116 @@ def ingest_documents(self, query: str = "cat:cs.AI", max_results: int = 5, skip_
     except Exception as e:
         logger.error("Ingestion failed: %s", e)
         raise e
+
+@celery_app.task(bind=True)
+def process_uploaded_pdf(self, file_path: str, filename: str):
+    """
+    Process an uploaded PDF file and add it to the vector database.
+    
+    Args:
+        file_path: Path to the uploaded PDF file
+        filename: Original filename
+        
+    Returns:
+        Processing result with status and statistics
+    """
+    logger.info("Processing uploaded PDF: %s", filename)
+    try:
+        # Extract text from PDF
+        text = PDFProcessor.extract_text(file_path)
+        
+        # Create metadata for uploaded paper
+        paper_metadata = {
+            "title": filename.replace('.pdf', ''),
+            "source": "uploaded",
+            "arxiv_id": "N/A",
+            "url": "N/A",
+            "filepath": file_path
+        }
+        
+        # Create chunks
+        chunks = PDFProcessor.create_chunks(text, paper_metadata)
+        
+        if chunks:
+            # Add to vector database
+            db = VectorDatabase()
+            db.add_documents(chunks)
+            
+            logger.info("Successfully processed uploaded PDF: %s (%d chunks)", filename, len(chunks))
+            return {
+                "status": "success",
+                "filename": filename,
+                "chunks_added": len(chunks),
+                "message": "Paper successfully processed and added to database"
+            }
+        else:
+            logger.warning("No content extracted from uploaded PDF: %s", filename)
+            return {
+                "status": "no_content",
+                "filename": filename,
+                "chunks_added": 0,
+                "message": "No text content could be extracted from the PDF"
+            }
+            
+    except Exception as e:
+        logger.error("Failed to process uploaded PDF %s: %s", filename, e)
+        raise e
+
+@celery_app.task(bind=True)
+def generate_suggested_questions(self, current_query: str, answer: str, chat_history: list):
+    """
+    Generate suggested follow-up questions based on the current conversation.
+    
+    Args:
+        current_query: The current user query
+        answer: The answer that was provided
+        chat_history: List of previous Q&A pairs
+        
+    Returns:
+        List of suggested follow-up questions
+    """
+    logger.info("Generating suggested questions for query: %s", current_query)
+    try:
+        rag_system = get_rag_system()
+        
+        # Build context from chat history
+        history_context = ""
+        if chat_history:
+            history_context = "Previous conversation:\n"
+            for item in chat_history[-3:]:  # Use last 3 exchanges
+                history_context += f"Q: {item.get('query', '')}\nA: {item.get('answer', '')[:200]}...\n\n"
+        
+        # Create prompt for generating suggestions
+        prompt = f"""{history_context}Current Question: {current_query}
+
+Current Answer: {answer[:500]}...
+
+Based on the conversation above, suggest 3 insightful follow-up questions that would help the user explore this topic deeper. The questions should:
+1. Build on the current context
+2. Be specific and answerable from research papers
+3. Explore different angles (clarification, deeper dive, related topics)
+
+Format: Return ONLY the questions, one per line, without numbering or bullets."""
+        
+        # Generate suggestions using LLM
+        suggestions_text = rag_system.llm_client.generate(prompt)
+        
+        # Parse suggestions into list
+        suggestions = [
+            line.strip().lstrip('123456789.- ')
+            for line in suggestions_text.split('\n')
+            if line.strip() and len(line.strip()) > 10
+        ]
+        
+        # Limit to 3 suggestions
+        suggestions = suggestions[:3]
+        
+        logger.info("Generated %d suggested questions", len(suggestions))
+        return {
+            "status": "success",
+            "suggestions": suggestions
+        }
+        
+    except Exception as e:
+        logger.error("Failed to generate suggested questions: %s", e)
+        raise e

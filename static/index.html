@@ -78,11 +78,29 @@
                                 required
                             ></textarea>
                         </div>
+                        <div class="form-group">
+                            <label>
+                                <input type="checkbox" id="enable-streaming" checked>
+                                Enable streaming responses (real-time)
+                            </label>
+                        </div>
                         <button type="submit" class="btn btn-primary" id="query-submit">
                             <span class="btn-text">Submit Query</span>
                             <span class="loader" style="display: none;"></span>
                         </button>
                     </form>
+                </div>
+
+                <!-- Chat History -->
+                <div id="chat-history" class="card" style="display: none;">
+                    <h2>Conversation History</h2>
+                    <div id="chat-history-list"></div>
+                </div>
+
+                <!-- Suggested Questions -->
+                <div id="suggested-questions" class="card" style="display: none;">
+                    <h3>Suggested Follow-up Questions</h3>
+                    <div id="suggestions-list"></div>
                 </div>
 
                 <div id="results" class="card" style="display: none;">
@@ -147,6 +165,27 @@
 
                         <button type="submit" class="btn btn-primary" id="ingest-submit">
                             <span class="btn-text">Start Ingestion</span>
+                            <span class="loader" style="display: none;"></span>
+                        </button>
+                    </form>
+                </div>
+
+                <div class="card">
+                    <h2>Upload a PDF Paper</h2>
+                    <form id="upload-form">
+                        <div class="form-group">
+                            <label for="pdf-file">Select PDF File</label>
+                            <input 
+                                type="file" 
+                                id="pdf-file" 
+                                name="pdf-file" 
+                                accept=".pdf"
+                                required
+                            >
+                            <small class="help-text">Upload your own research paper for querying</small>
+                        </div>
+                        <button type="submit" class="btn btn-primary" id="upload-submit">
+                            <span class="btn-text">Upload Paper</span>
                             <span class="loader" style="display: none;"></span>
                         </button>
                     </form>
