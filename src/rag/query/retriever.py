@@ -1,12 +1,13 @@
-from typing import List, Dict, Optional
-import logging
-import concurrent.futures
-import pickle
-import os
+"""Hybrid dense and BM25 retrieval with reciprocal-rank fusion."""
+
 import hashlib
-import json
+import logging
+import threading
+from typing import Any, Dict, List, Optional
+
 from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
+
 from src.common.config import Config
 from src.rag.vector_db import VectorDatabase
 
@@ -14,168 +15,76 @@ logger = logging.getLogger(__name__)
 
 
 class HybridRetriever:
-    """Hybrid retrieval combining BM25 and vector search with Redis caching."""
-    
-    def __init__(self, vector_db: VectorDatabase, redis_client=None):
-        """
-        Initialize hybrid retriever.
-        
-        Args:
-            vector_db: Vector database instance
-            redis_client: Optional Redis client for caching retrieval results
-        """
-        self.vector_db = vector_db
-        self.redis = redis_client
-        self.chroma_retriever = vector_db.as_retriever(k=Config.RETRIEVAL_K)
-        self._init_bm25_retriever()
-    
-    def _init_bm25_retriever(self):
-        """Initializes BM25 retriever from cached index or builds new one."""
-        index_path = os.path.join(Config.DB_DIR, "bm25_index.pkl")
-        
-        # Try loading from disk cache
-        if os.path.exists(index_path):
-            try:
-                logger.info("Loading BM25 index from disk cache")
-                with open(index_path, 'rb') as f:
-                    self.bm25_retriever = pickle.load(f)
-                self.bm25_retriever.k = Config.RETRIEVAL_K
-                logger.info("BM25 index loaded successfully")
-                return
-            except Exception as e:
-                logger.warning("Failed to load BM25 cache: %s. Rebuilding...", e)
-        
-        # Build from scratch
-        logger.info("Building BM25 index from documents")
-        docs = self.vector_db.get_all_documents()
+    """Retrieve with dense and sparse search, then combine rankings with RRF."""
 
-        if docs:
-            self.bm25_retriever = BM25Retriever.from_documents(docs)
-            self.bm25_retriever.k = Config.RETRIEVAL_K
-            
-            # Persist to disk
-            try:
-                with open(index_path, 'wb') as f:
-                    pickle.dump(self.bm25_retriever, f)
-                logger.info("BM25 index cached to disk")
-            except Exception as e:
-                logger.warning("Failed to cache BM25 index: %s", e)
-        else:
-            logger.warning("No documents found in database. BM25 retriever disabled")
-            self.bm25_retriever = None
-    
-    def invalidate_bm25_cache(self):
-        """Invalidate BM25 cache. Call after adding new documents."""
-        index_path = os.path.join(Config.DB_DIR, "bm25_index.pkl")
-        if os.path.exists(index_path):
-            try:
-                os.remove(index_path)
-                logger.info("BM25 cache invalidated")
-            except Exception as e:
-                logger.warning("Failed to invalidate BM25 cache: %s", e)
-    
-    def _vector_retrieve(self, query: str, filter_metadata: Dict = None) -> List[Document]:
-        """Vector retrieval helper (for parallel execution)."""
-        if filter_metadata:
-            return self.vector_db.similarity_search(
-                query,
-                k=Config.RETRIEVAL_K,
-                filter=filter_metadata
+    def __init__(self, vector_db: VectorDatabase):
+        self.vector_db = vector_db
+        self._bm25_retriever = None
+        self._bm25_collection_version = None
+        self._bm25_lock = threading.Lock()
+        self._bm25_docs: List[Document] = []
+
+    @staticmethod
+    def _document_key(doc: Document) -> str:
+        source = doc.metadata.get("source") or doc.metadata.get("arxiv_id")
+        chunk_id = doc.metadata.get("chunk_id")
+        if source is not None and chunk_id is not None:
+            return f"{source}:{chunk_id}"
+        return hashlib.sha256(doc.page_content.encode("utf-8")).hexdigest()
+
+    def _ensure_bm25(self, collection_version: int) -> None:
+        if self._bm25_collection_version == collection_version:
+            return
+        with self._bm25_lock:
+            if self._bm25_collection_version == collection_version:
+                return
+            self._bm25_docs = self.vector_db.get_all_documents()
+            self._bm25_retriever = (
+                BM25Retriever.from_documents(self._bm25_docs) if self._bm25_docs else None
             )
-        else:
-            return self.chroma_retriever.invoke(query)
-    
-    def _bm25_retrieve(self, query: str, filter_metadata: Dict = None) -> List[Document]:
-        """BM25 retrieval helper (for parallel execution)."""
-        if not self.bm25_retriever:
-            return []
-        
-        bm25_docs = self.bm25_retriever.invoke(query)
-        
-        # Apply metadata filter if specified
+            self._bm25_collection_version = collection_version
+            logger.info("Built BM25 index for %d chunks", len(self._bm25_docs))
+
+    def _bm25_search(
+        self,
+        query: str,
+        k: int,
+        filter_metadata: Optional[Dict[str, Any]],
+    ) -> List[Document]:
+        docs = self._bm25_docs
         if filter_metadata:
-            bm25_docs = [
-                doc for doc in bm25_docs
-                if all(doc.metadata.get(k) == v for k, v in filter_metadata.items())
+            docs = [
+                doc for doc in docs
+                if all(doc.metadata.get(key) == value for key, value in filter_metadata.items())
             ]
-        
-        return bm25_docs
-    
+            retriever = BM25Retriever.from_documents(docs) if docs else None
+        else:
+            retriever = self._bm25_retriever
+        if retriever is None:
+            return []
+        retriever.k = k
+        return retriever.invoke(query)
+
     def retrieve(
         self,
         query: str,
-        filter_metadata: Dict = None
+        filter_metadata: Optional[Dict[str, Any]] = None,
+        k: Optional[int] = None,
     ) -> List[Document]:
-        """
-        Hybrid retrieval: BM25 + Vector search with optional metadata filtering and Redis caching.
-        Runs BM25 and vector search in parallel for better performance.
-        
-        Args:
-            query: Search query
-            filter_metadata: Optional metadata filters (e.g., {'section': 'methods'})
-            
-        Returns:
-            List of retrieved documents
-        """
-        # Check Redis cache (only for non-filtered queries)
-        if self.redis and not filter_metadata:
-            cache_key = f"retrieval:{hashlib.md5(query.encode()).hexdigest()}"
-            try:
-                cached = self.redis.get(cache_key)
-                if cached:
-                    logger.info("Retrieval cache hit for query: %s", query[:50])
-                    data = json.loads(cached)
-                    return [
-                        Document(page_content=d['content'], metadata=d['metadata'])
-                        for d in data
-                    ]
-            except Exception as e:
-                logger.warning("Cache read error: %s", e)
-        
-        scored_docs: Dict[str, Dict] = {}
+        k = k or Config.RETRIEVAL_K
+        collection_version = self.vector_db.collection_version()
+        self._ensure_bm25(collection_version)
 
-        # Parallel retrieval for 30-40% speed improvement
-        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-            # Submit both retrieval tasks
-            vector_future = executor.submit(self._vector_retrieve, query, filter_metadata)
-            bm25_future = executor.submit(self._bm25_retrieve, query, filter_metadata)
-            
-            # Gather results
-            vector_docs = vector_future.result()
-            bm25_docs = bm25_future.result()
-        
-        # Combine scores from vector search
-        for doc in vector_docs:
-            key = doc.page_content
-            if key not in scored_docs:
-                scored_docs[key] = {"doc": doc, "score": 0.0}
-            scored_docs[key]["score"] += 0.5
+        dense_docs = self.vector_db.similarity_search(query, k=k, filter=filter_metadata)
+        sparse_docs = self._bm25_search(query, k, filter_metadata)
 
-        # Combine scores from BM25
-        for doc in bm25_docs:
-            key = doc.page_content
-            if key not in scored_docs:
-                scored_docs[key] = {"doc": doc, "score": 0.0}
-            scored_docs[key]["score"] += 0.5
+        # Reciprocal Rank Fusion is robust when dense and sparse scores use different scales.
+        fused: Dict[str, Dict[str, Any]] = {}
+        for ranking in (dense_docs, sparse_docs):
+            for rank, doc in enumerate(ranking, start=1):
+                key = self._document_key(doc)
+                if key not in fused:
+                    fused[key] = {"doc": doc, "score": 0.0}
+                fused[key]["score"] += 1.0 / (60 + rank)
 
-        # Sort by combined score
-        ranked = sorted(
-            scored_docs.values(),
-            key=lambda x: x["score"],
-            reverse=True,
-        )
-
-        final_docs = [item["doc"] for item in ranked[:Config.RETRIEVAL_K]]
-        
-        # Cache results (5 minute TTL for non-filtered queries)
-        if self.redis and not filter_metadata:
-            try:
-                cache_data = [
-                    {'content': doc.page_content, 'metadata': doc.metadata}
-                    for doc in final_docs
-                ]
-                self.redis.setex(cache_key, 300, json.dumps(cache_data))
-            except Exception as e:
-                logger.warning("Cache write error: %s", e)
-        
-        return final_docs
+        return [entry["doc"] for entry in sorted(fused.values(), key=lambda item: item["score"], reverse=True)[:k]]

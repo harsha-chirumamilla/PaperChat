@@ -3,32 +3,37 @@ import os
 class Config:
     # Paths
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    
-    # Use /data for HuggingFace Spaces (persistent volume), /app/data otherwise
-    # HF Spaces sets SPACE_ID environment variable
+
+    # Use the platform's persistent mount on Spaces, or an explicit DATA_DIR.
     if os.getenv("SPACE_ID") or os.getenv("HF_SPACE"):
-        DATA_DIR = "/data"
+        DATA_DIR = os.getenv("DATA_DIR", "/data")
     else:
-        DATA_DIR = os.path.join(os.path.dirname(BASE_DIR), "data")
-    
+        PROJECT_DIR = os.path.dirname(os.path.dirname(BASE_DIR))
+        DATA_DIR = os.getenv("DATA_DIR", os.path.join(PROJECT_DIR, "data"))
+
     PAPERS_DIR = os.path.join(DATA_DIR, "papers")
     DB_DIR = os.path.join(DATA_DIR, "db")
 
     # Model Settings
     MODEL_PROVIDER = os.getenv("MODEL_PROVIDER", "openai")  # "openai", "anthropic", or "gemini"
-    
+
+    # Backend API. If unset, auth is disabled for local development.
+    API_KEY = os.getenv("PAPERCHAT_API_KEY", "")
+    MAX_UPLOAD_SIZE_BYTES = int(os.getenv("MAX_UPLOAD_SIZE_BYTES", 50 * 1024 * 1024))
+    CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", 3600))
+
     # OpenAI Settings
     OPENAI_MODEL_ID = os.getenv("OPENAI_MODEL_ID", "gpt-4-turbo")
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-    
+
     # Anthropic Settings
     ANTHROPIC_MODEL_ID = os.getenv("ANTHROPIC_MODEL_ID", "claude-3-5-sonnet-20241022")
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-    
+
     # Google Gemini Settings
     GEMINI_MODEL_ID = os.getenv("GEMINI_MODEL_ID", "gemini-2.0-flash-exp")
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-    
+
     # Embedding and Reranker Models
     EMBEDDING_MODEL_ID = os.getenv("EMBEDDING_MODEL_ID", "BAAI/bge-large-en-v1.5")
     RERANKER_MODEL_ID = os.getenv("RERANKER_MODEL_ID", "cross-encoder/ms-marco-MiniLM-L-6-v2")
@@ -45,24 +50,8 @@ class Config:
 
     # Ingestion
     MAX_PAPERS_PER_BATCH = int(os.getenv("MAX_PAPERS_PER_BATCH", 5))
-    
-    # Query Expansion
-    ENABLE_QUERY_EXPANSION = os.getenv("ENABLE_QUERY_EXPANSION", "true").lower() == "true"
-    QUERY_EXPANSION_VARIANTS = int(os.getenv("QUERY_EXPANSION_VARIANTS", 2))
-    
-    # Context Compression
-    MAX_CONTEXT_TOKENS = int(os.getenv("MAX_CONTEXT_TOKENS", 2500))
-    COMPRESSION_ENABLED = os.getenv("COMPRESSION_ENABLED", "true").lower() == "true"
-    
-    # Agentic Workflow (expensive - disabled by default)
-    ENABLE_AGENT = os.getenv("ENABLE_AGENT", "false").lower() == "true"
-    AGENT_MAX_ITERATIONS = int(os.getenv("AGENT_MAX_ITERATIONS", 5))
-    
-    # Answer Validation (expensive - disabled by default for cost efficiency)
-    VALIDATE_ANSWERS = os.getenv("VALIDATE_ANSWERS", "false").lower() == "true"
-    VALIDATION_THRESHOLD = float(os.getenv("VALIDATION_THRESHOLD", 0.7))
-    
-    # Hierarchical Chunking
+
+    # Recursive chunking gives predictable chunk sizes and overlap.
     USE_HIERARCHICAL_CHUNKING = os.getenv("USE_HIERARCHICAL_CHUNKING", "false").lower() == "true"
 
 # Create directories if they don't exist

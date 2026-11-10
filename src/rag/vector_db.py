@@ -1,22 +1,16 @@
 from typing import List
 import logging
 from langchain_chroma import Chroma
-from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_core.documents import Document as LangChainDocument
 from src.common.config import Config
-from src.rag.embeddings import get_device
+from src.rag.embeddings import get_embedding_function
 
 logger = logging.getLogger(__name__)
 
 
 class VectorDatabase:
     def __init__(self, persistence_directory: str = Config.DB_DIR):
-        device = get_device()
-        self.embedding_fn = HuggingFaceEmbeddings(
-            model_name=Config.EMBEDDING_MODEL_ID,
-            model_kwargs={'device': device}, 
-            encode_kwargs={'normalize_embeddings': True}
-        )
+        self.embedding_fn = get_embedding_function()
         self.persist_dir = persistence_directory
         self._db = Chroma(
             persist_directory=self.persist_dir,
@@ -58,3 +52,7 @@ class VectorDatabase:
                 meta = data['metadatas'][i] if data['metadatas'] else {}
                 docs.append(LangChainDocument(page_content=text, metadata=meta))
         return docs
+
+    def collection_version(self) -> int:
+        """Return the current chunk count so BM25 can refresh after ingestion."""
+        return int(self._db._collection.count())

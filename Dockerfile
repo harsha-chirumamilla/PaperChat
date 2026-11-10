@@ -36,7 +36,6 @@ WORKDIR /app
 
 # Install only runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    poppler-utils \
     redis-server \
     supervisor \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
@@ -51,7 +50,6 @@ ENV VIRTUAL_ENV=/app/venv \
 
 # Copy application code
 COPY src ./src
-COPY static ./static
 COPY entrypoint.sh /app/entrypoint.sh
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 

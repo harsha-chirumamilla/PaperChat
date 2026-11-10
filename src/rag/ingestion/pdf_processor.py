@@ -1,10 +1,9 @@
 import fitz
 import logging
 from typing import List, Dict
-from langchain_experimental.text_splitter import SemanticChunker
 from langchain_core.documents import Document as LangChainDocument
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from src.common.config import Config
-from src.rag.embeddings import get_embedding_function
 from src.rag.ingestion.hierarchical_chunker import HierarchicalChunker
 
 logger = logging.getLogger(__name__)
@@ -60,35 +59,23 @@ class PDFProcessor:
                 base_chunk_size=Config.CHUNK_SIZE
             )
         
-        # Standard semantic chunking
-        embedding_function = get_embedding_function()
-        
-        splitter = SemanticChunker(
-            embeddings=embedding_function,
-            breakpoint_threshold_type="percentile"
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=Config.CHUNK_SIZE,
+            chunk_overlap=Config.CHUNK_OVERLAP,
+            add_start_index=True,
         )
-        
-        try:
-            texts = splitter.split_text(text)
-        except Exception as e:
-            logger.warning("Semantic chunking failed: %s. Falling back to basic splitting", e)
-            # Fallback (import here to avoid circular or overhead if rarely used)
-            from langchain_text_splitters import RecursiveCharacterTextSplitter
-            splitter = RecursiveCharacterTextSplitter(
-                chunk_size=Config.CHUNK_SIZE, 
-                chunk_overlap=Config.CHUNK_OVERLAP
-            )
-            texts = splitter.split_text(text)
+        split_documents = splitter.create_documents([text])
 
         chunks = []
-        for i, t in enumerate(texts):
+        for i, split_doc in enumerate(split_documents):
             # Clean up keys for metadata to ensure compatibility
             clean_meta = {
                 "source": source_id,
                 "title": title,
                 "chunk_id": i,
+                "start_index": split_doc.metadata.get("start_index", 0),
                 "url": url
             }
-            chunks.append(LangChainDocument(page_content=t, metadata=clean_meta))
+            chunks.append(LangChainDocument(page_content=split_doc.page_content, metadata=clean_meta))
             
         return chunks

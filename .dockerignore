@@ -1,4 +1,4 @@
-# Don't copy these into the Docker build context
+# Don't copy generated or local-only files into the Docker build context
 data/
 *.pyc
 __pycache__/
