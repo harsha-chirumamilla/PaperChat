@@ -165,8 +165,12 @@ jobs:
         # Upload src directory
         hf upload $HF_SPACE src/ src --repo-type=space --commit-message="Update source code"
         
-        # Upload static directory (Web UI)
-        hf upload $HF_SPACE static/ static --repo-type=space --commit-message="Update static files"
+        # Upload static assets only when the repository contains them.
+        if [ -d "static" ]; then
+          hf upload "$HF_SPACE" static/ static --repo-type=space --commit-message="Update static files"
+        else
+          echo "No static directory found; skipping static asset upload."
+        fi
         
         echo "Files uploaded successfully to $HF_SPACE"
     
