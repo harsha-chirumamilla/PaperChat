@@ -18,7 +18,7 @@ services:
 
   worker:
     build: .
-    command: ["celery", "-A", "src.worker.celery_app", "worker", "--loglevel=info", "--concurrency=4"]
+    command: ["celery", "-A", "src.worker.celery_app", "worker", "--loglevel=info", "--concurrency=1"]
     env_file: .env
     environment:
       CELERY_BROKER_URL: redis://redis:6379/0

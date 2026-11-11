@@ -20,6 +20,7 @@ celery_app.conf.update(
     enable_utc=True,
     task_acks_late=True,
     worker_prefetch_multiplier=1,
+    worker_concurrency=1,
     task_track_started=True,
     result_expires=86400,
 )

@@ -45,11 +45,40 @@ run:
 
 ```bash
 uvicorn src.api.main:app --reload --port 8000
-celery -A src.worker.celery_app worker --loglevel=info
+celery -A src.worker.celery_app worker --loglevel=info --concurrency=1
 ```
 
 Configure `CELERY_BROKER_URL` and `CELERY_RESULT_BACKEND` to point to the same reachable Redis service. Set
 `PAPERCHAT_API_KEY` for API authentication. If it is unset, authentication is disabled for local development.
+
+## Repeatable retrieval and answer evaluation
+
+The evaluation runner uses the same retrieval, reranking, prompt, and generation components as the query worker. It
+bypasses the task queue and answer cache, so each case measures a fresh pipeline run. The starter set references
+arXiv papers `1706.03762` and `1810.04805`; ingest both into the same Chroma data directory before running the
+benchmark. Submit an ingestion request to `/api/v1/ingest` for each ID with `{"query":"id:1706.03762","max_results":1}`
+(then repeat with `1810.04805`) and wait for both to finish. Include the configured `X-API-Key` header if API
+authentication is enabled.
+
+Install the API and worker requirements, configure a provider API key in `.env`, then run:
+
+```bash
+python -m evals.run
+```
+
+The command writes a JSON report to `evals/results/latest.json` (ignored by Git). Use `--dataset` to select another
+JSONL benchmark and `--output` to preserve a separate report. Each JSONL row requires a unique `id`, a `question`,
+and non-empty `relevant_source_ids`; `supporting_source_ids` can separately annotate acceptable citations, and
+`reference_answer` is included for human review. Source IDs are matched without arXiv version suffixes.
+
+The report includes pre-reranking Recall@k and MRR, recall in the final reranked context, citation precision/recall/F1
+against the annotated supporting source IDs, inline citation-label validity, and mean/p50/p95 latency for retrieval,
+reranking, generation, and the full uncached query. It also records answers beside reference answers for manual
+correctness review. Citation scores measure agreement with the benchmark annotations; they do not by themselves
+establish factual correctness. The initial retrieval warm-up and model initialization times are reported separately.
+The report records dataset and corpus hashes plus the model and retrieval settings. For model comparisons, keep the
+dataset, corpus, retrieval settings, provider/model, and temperature fixed; generation latency includes network and
+provider time.
 
 ## API
 
